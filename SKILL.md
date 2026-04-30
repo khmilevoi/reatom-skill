@@ -42,6 +42,7 @@ Use this skill when the task mentions any of the following:
 - Mutations/commands: use `action(async () => ...).extend(withAsync(...))`.
 - Async boundaries: use `wrap(...)` for promises and callbacks that touch Reatom.
 - Local state updates: prefer direct `atom.set(...)`; avoid identity setter actions.
+- Writable dependent state: use `withComputed(...)` instead of React `key` resets or sync effects.
 - Editable nested data: atomize mutable fields and keep readonly fields plain.
 - Routes: use `reatomRoute` loaders and `render`; avoid manual `route.match()` component branching.
 - URL filters and preferences: use `withSearchParams` and persistence extensions.
@@ -53,6 +54,7 @@ Use this skill when the task mentions any of the following:
 | Async read/query | `computed + withAsyncData` | `effect`/`useEffect` fetch |
 | Mutation/command | `action + withAsync` | Manual loading/error atoms |
 | Direct local update | `atom.set` | Identity setter action |
+| Dependent writable state | `withComputed` | `useEffect` sync/reset |
 | Route page data | Route `loader`/`render` | `route.match()` component branch |
 | Editable row state | Atomized item model | Parallel UI-state maps |
 | Async callback | `wrap` or `onEvent` | Raw `.then`/event callbacks touching atoms |
@@ -60,6 +62,7 @@ Use this skill when the task mentions any of the following:
 ## Do Not Recommend
 
 - `useEffect` or mount-time fetch code for idempotent Reatom read/query data.
+- React `key` resets or sync effects for writable state derived from another atom.
 - Identity setter actions such as `setUser = action((value) => user.set(value))`.
 - Free-standing setter helpers that only forward values into an atom.
 - Manual route rendering branches such as `if (!route.match()) return null`.
@@ -72,6 +75,7 @@ Use this skill when the task mentions any of the following:
   - `Core primitives and mental model`
   - `withAsync`
   - `wrap rules`
+  - `React-to-Reatom decision guide`
   - `Primitives quick usage`
   - `Atomization`
   - `Lifecycle and extension hooks`
@@ -123,6 +127,7 @@ Inspect the bundled repo only for:
 - Are all atoms, computeds, actions, and routes named for tracing?
 - Did async code preserve context with `wrap` at every relevant boundary?
 - Did async reads avoid imperative fetch effects unless there is a specific reason?
+- Did React hook orchestration collapse into Reatom computeds, extensions, or route/form primitives?
 - Did direct setters stay as `atom.set(...)` instead of pass-through actions?
 - Did route code use loaders/render/outlet for route-scoped lifetime?
 - Did dynamic editable structures use atomization instead of parallel state maps?

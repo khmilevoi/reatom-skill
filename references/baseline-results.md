@@ -18,6 +18,7 @@ Fill this file when scenarios are run without and with the skill.
 | Editable List Item UI State | Not run | Not run | Pending |
 | Async Boundary After Callback | Not run | Not run | Pending |
 | Debounced Search | Not run | Not run | Pending |
+| React Hook Orchestration with Enabled Flags | Not run | Not run | Pending |
 
 ## Rationalizations To Watch
 
@@ -27,6 +28,7 @@ Fill this file when scenarios are run without and with the skill.
 - "Route matching in components is easier to understand."
 - "Normalized maps are always the scalable option."
 - "Wrapping is unnecessary after the first await."
+- "React-style enabled flags are the clearest way to coordinate conditional async work."
 
 ## Result Entry Template
 

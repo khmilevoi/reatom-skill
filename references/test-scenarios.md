@@ -131,3 +131,28 @@ Failure signs:
 
 - Recommends a standalone `debounce(fn, ms)` helper as the first choice.
 - Omits abort/context handling.
+
+## Scenario 7: React Hook Orchestration with Enabled Flags
+
+Prompt:
+
+> Convert a React hook that derives whether a balance warning can load, passes `enabled` flags to two async hooks, and returns a balance status. Model it with Reatom.
+
+Expected:
+
+- Uses one `computed(async () => ...)` for the derived async business flow.
+- Extends with `withAsyncData({ initState: ... })` or equivalent.
+- Uses early returns for unavailable agreement, missing permissions, canceled state, and other "do not load" branches.
+- Uses `wrap(Promise.all(...))` or wrapped async calls for the required requests.
+- Names atoms/computeds and keeps the dependency flow readable.
+
+Source-backed note:
+
+- Artyom's "When React Hooks Start Feeling Heavy" article shows this class of hook orchestration as a good fit for `computed(async) + withAsyncData`.
+
+Failure signs:
+
+- Recreates React-style `enabled` flag objects or placeholder params in Reatom.
+- Splits the flow into several independent manual loading/error atoms.
+- Uses `effect` or component mount logic as the main async orchestration mechanism.
+- Keeps duplicated state solely to coordinate async hook timing.

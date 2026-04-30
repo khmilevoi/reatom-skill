@@ -24,17 +24,121 @@ for generic state-management patterns:
 - Async mutation/command: `action(async () => ...).extend(withAsync(...))`.
 - Promise or callback boundary that touches Reatom: preserve context with `wrap`.
 - Direct local state update: use `atom.set(...)`, not an identity setter action.
+- Writable dependent state: use `withComputed(...)`, not React `key` resets or sync effects.
 - Dynamic editable object/list data: atomize mutable fields and compose factories.
 - Route lifetime: use `reatomRoute` loaders, `render`, layouts, and `outlet`.
 - URL state and persistence: use `withSearchParams`, `withLocalStorage`, and related extensions.
+- React orchestration smell: when code grows into local state plus effects plus sync flags,
+  move the state graph into Reatom computeds, extensions, forms, routes, and async data.
 
 Before finalizing advice, check for common anti-patterns: imperative mount-time
 fetching for idempotent data, pass-through setter actions, manual route branching
-in components, separate parallel local state maps for list items, unwrapped async
-continuations, and unnamed atoms/actions/computeds.
+in components, React `key` reset tricks, separate parallel local state maps for
+list items, duplicated hook state, unwrapped async continuations, and unnamed
+atoms/actions/computeds.
 
 This summary is intentionally **compact**. The full handbook and reference cover deeper API
 details, recipes, and adapters in [site](https://v1000.reatom.dev) `/docs/start/*`, `/docs/handbook/*`, and `/docs/reference/*`.
+
+## React-to-Reatom decision guide
+
+Distilled from Artyom's DEV articles:
+
+- https://dev.to/artalar/reatom-state-management-that-grows-with-you-1i4
+- https://dev.to/artalar/when-react-hooks-start-feeling-heavy-2njf
+
+Use this guide when translating React hook-heavy code into Reatom models.
+
+| React pressure | Reatom shape |
+| --- | --- |
+| `useEffect` sync to reset one state from another | Target atom with `withComputed(...)` |
+| `key` reset to rebuild a subtree | Explicit atom-level reset or `withComputed` |
+| Hook `enabled` flags and placeholder params | `computed(async)` with early returns |
+| Duplicated hook state to add persistence or validation | Add extensions to the original atom |
+| Conditional hook reads forced by hook order | `reatomComponent` reads only the active branch |
+| "Where did this update come from?" logs | Named units plus `wrap` for cause-aware traces |
+
+Default approach:
+
+1. Keep rendering in React and move coordination into Reatom units.
+2. Use `computed` for derived and idempotent async read data.
+3. Use `withComputed` when a writable atom must rederive from another atom.
+4. Use extensions for cross-cutting behavior: persistence, validation, mapping, analytics, middleware, media queries, and storage sync.
+5. Use early returns inside `computed(async)` to stop unnecessary reads, subscriptions, and requests.
+
+### Before/after: reset pagination from search
+
+React sync effects often reset dependent state after a render:
+
+```tsx
+function SearchPanel({ query }: { query: string }) {
+  const [page, setPage] = useState(1)
+
+  useEffect(() => {
+    setPage(1)
+  }, [query])
+
+  return null
+}
+```
+
+Prefer making the dependency explicit in the target atom:
+
+```ts
+import { atom, withComputed, withSearchParams } from '@reatom/core'
+
+const search = atom('', 'search').extend(withSearchParams('search'))
+const page = atom(1, 'page').extend(
+  withSearchParams('page'),
+  withComputed(() => {
+    search()
+    return 1
+  }),
+)
+```
+
+This resets only `page`; it does not remount unrelated UI state and does not need a sync effect.
+
+### Before/after: enabled flags and async queries
+
+React hooks often encode business flow through many `enabled` flags and empty fallback params:
+
+```ts
+const params = canLoad ? { enabled: true, id } : { enabled: false, id: '' }
+const balance = useBalanceQuery(params)
+const consumption = useConsumptionQuery(params, { enabled: canLoad })
+```
+
+Prefer a single async computed with natural early returns:
+
+```ts
+import { atom, computed, withAsyncData, wrap } from '@reatom/core'
+
+const user = atom<User | null>(null, 'user')
+const agreement = atom<Agreement | null>(null, 'agreement')
+
+const balanceState = computed(async () => {
+  const currentAgreement = agreement()
+  if (!currentAgreement) return BalanceStatus.None
+  if (currentAgreement.isCanceled) return BalanceStatus.ResourcesStopped
+
+  const currentUser = user()
+  if (!canViewBalance(currentUser, currentAgreement)) {
+    return BalanceStatus.None
+  }
+
+  const [balance, consumption] = await wrap(
+    Promise.all([
+      api.getBalance(currentAgreement.id),
+      api.getDailyConsumption(currentAgreement.id),
+    ]),
+  )
+
+  return getBalanceStatus(balance, consumption)
+}, 'balanceState').extend(withAsyncData({ initState: BalanceStatus.None }))
+```
+
+Early returns make the dependency flow visible, avoid placeholder params, and keep the async chain traceable.
 
 ## Core primitives and mental model
 
@@ -187,7 +291,7 @@ Key points
 
 ## **wrap** rules
 
-**wrap** preserves async context for actions, effects, and atom updates. It is important to use wrap everywhere, even if it not necessary and can't brake something, it increase logs tracing and debugging capabilities.
+**wrap** preserves async context for actions, effects, and atom updates. It is important to use wrap everywhere, even if it not necessary and can't brake something, it increase logs tracing and debugging capabilities. The same cause chain powers cancellation, process tracking, async transactions, and useful "why did this update happen?" logs.
 
 Rules of thumb
 
@@ -261,6 +365,8 @@ Rule of thumb
 
 - Mutable properties -> atoms.
 - Readonly properties -> primitives.
+- Backend DTOs stay plain at the boundary; application models atomize only the fields that the UI or workflow mutates.
+- Do not atomize everything by default. Make reactivity explicit where it buys local updates, subscriptions, validation, or effects.
 
 Simple example
 
@@ -308,6 +414,10 @@ const users = atom<Array<UserModel>>([], 'users').extend((target) => ({
 
 This pattern avoids O(n) immutable name changes for each field edit and keeps updates
 focused on exactly the changed part. This data and actions modelling helps to archive the best part of OOP principles without the complexity of classes and so on.
+
+The performance model is the main reason to prefer atomization for editable lists:
+changing `users()[idx].name` is an O(1) field update instead of recreating a full
+array and every intermediate object on each keystroke.
 
 **Bad pattern**: normalize backend data, create separate additional list of elements states ("selected" / "checked" and so on).
 **Good pattern**: atomize backend data, expand each element with additional atoms for local states ("selected" / "checked" and so on).
@@ -607,6 +717,13 @@ Key primitives
 - **reatomFieldSet**: grouped fields with aggregate focus and validation
 - **reatomForm**: field set plus submit, schema validation, and form options
 
+Use forms when React code starts accumulating field state, dirty flags, touched
+flags, async validators, and submit errors across several hooks. Keep form
+structure as objects and atoms instead of string paths. Reatom forms support
+field-level and form-level validation, Standard Schema validators such as Zod or
+Valibot, async validation, dynamic field arrays, focus state, dirty state, and
+error state.
+
 ### Base form with schema and submit
 
 ```ts
@@ -712,6 +829,7 @@ Tricky
 
 - Validation errors for schema are distributed by path.
 - Triggered state for field sets is true only when all fields were triggered.
+- Use field arrays for dynamic lists instead of parallel arrays of values, errors, and touched flags.
 
 ## Routing
 
@@ -775,6 +893,11 @@ const issueRoute = reatomRoute({
 Route loaders are async computeds with `withAsyncData` built-in. They run when route matches, auto-abort on navigation away. Nested loaders await parents and receive merged params. Effects inside loaders also auto-abort on navigation.
 
 Loader API (same as `withAsyncData`): **route.loader.data()**, **.ready()**, **.error()**, **.retry()**, **.status()**. Without explicit loader, `await wrap(route.loader())` returns validated params.
+
+Prefer loaders for page data that belongs to route lifetime. A loader can create
+route-scoped model factories; state created for that page is disconnected and
+eligible for cleanup when navigation leaves the route. This solves the common
+"global state cleanup" problem without manual unmount effects.
 
 ### Render and outlet — component composition
 
@@ -927,6 +1050,14 @@ import { atom, withLocalStorage } from '@reatom/core'
 
 const theme = atom<'light' | 'dark'>('light', 'theme').extend(withLocalStorage('theme'))
 ```
+
+Persistence notes:
+
+- Use storage adapters instead of custom `useEffect` read/write loops.
+- Available adapters include localStorage, sessionStorage, IndexedDB, BroadcastChannel, Cookie, Cookie Store, and in-memory storage.
+- Prefer schema validation for persisted payloads and add migrations when the format changes.
+- Use TTL when stale persisted data should expire.
+- Use memory fallback when browser storage may be unavailable.
 
 ## Suspense notes
 
