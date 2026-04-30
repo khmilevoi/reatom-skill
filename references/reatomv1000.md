@@ -15,6 +15,24 @@ This documentation for `@reatom/core@1000` package and some ecosystem around it.
 - Isomorphic and SSR-friendly with predictable async control.
 - Composable primitives, minimal API surface, high leverage extensions.
 
+## Agent defaults and validation
+
+When implementing or reviewing Reatom code, apply these defaults before reaching
+for generic state-management patterns:
+
+- Async query/read data: `computed(async () => ...).extend(withAsyncData(...))`.
+- Async mutation/command: `action(async () => ...).extend(withAsync(...))`.
+- Promise or callback boundary that touches Reatom: preserve context with `wrap`.
+- Direct local state update: use `atom.set(...)`, not an identity setter action.
+- Dynamic editable object/list data: atomize mutable fields and compose factories.
+- Route lifetime: use `reatomRoute` loaders, `render`, layouts, and `outlet`.
+- URL state and persistence: use `withSearchParams`, `withLocalStorage`, and related extensions.
+
+Before finalizing advice, check for common anti-patterns: imperative mount-time
+fetching for idempotent data, pass-through setter actions, manual route branching
+in components, separate parallel local state maps for list items, unwrapped async
+continuations, and unnamed atoms/actions/computeds.
+
 This summary is intentionally **compact**. The full handbook and reference cover deeper API
 details, recipes, and adapters in [site](https://v1000.reatom.dev) `/docs/start/*`, `/docs/handbook/*`, and `/docs/reference/*`.
 
@@ -97,7 +115,7 @@ It's cleaner and more efficient, as the computed subscribes and refetch the list
 ### extend example
 
 ```ts
-import { atom, computed, withAsyncData } from '@reatom/core'
+import { atom, computed, withAsyncData, wrap } from '@reatom/core'
 
 const page = atom(1, 'list.page')
 
@@ -721,6 +739,7 @@ userRoute.match() // true when URL starts with /users/123
 userRoute.go({ userId: '123' }) // push to /users/123
 userRoute.go({ userId: '123' }, true) // replace history entry
 userRoute.path({ userId: '123' }) // build URL string without navigating
+// urlAtom intercepts <a> clicks for SPA navigation by default, use .path() in href
 
 // nested routes — chain .reatomRoute(), paths auto-compose, params inherit
 const dashboardRoute = reatomRoute('dashboard')
@@ -733,11 +752,15 @@ const goodsRoute = reatomRoute({
   path: 'goods/:category',
   search: z.object({ sort: z.enum(['asc', 'desc']).optional() }),
 })
+// goodsRoute.go({ category: 'tech', sort: 'asc' }) -> /goods/tech?sort=asc
+// goodsRoute() -> { category: 'tech', sort: 'asc' }
 
 // search-only routes (no path) preserve current pathname — great for global modals
 const dialogRoute = reatomRoute({
   search: z.object({ dialog: z.enum(['login', 'signup']).optional() }),
 })
+// user at /profile/123 -> dialogRoute.go({ dialog: 'login' }) -> /profile/123?dialog=login
+// nested search-only routes navigate to parent path if user is elsewhere
 
 // params validation and transform with zod (or any Standard Schema)
 const issueRoute = reatomRoute({
@@ -774,7 +797,7 @@ Modal gate — route without URL path, `params(arg)` callback controls activatio
 
 ### urlAtom and global state
 
-`urlAtom.go('/path')` navigates, `urlAtom()` reads `{ pathname, search, hash }`, `urlAtom.catchLinks(false)` disables SPA link interception. `isSomeLoaderPending` tracks global loading state across all route loaders.
+`urlAtom.go('/path')` navigates, `urlAtom()` reads `{ pathname, search, hash }`, `urlAtom.catchLinks(false)` disables SPA link interception, and `urlAtom.routes` is a registry of all created routes. `isSomeLoaderPending` tracks global loading state across all route loaders.
 
 ### Full SPA example
 
@@ -861,6 +884,16 @@ export const userRoute = usersRoute.reatomRoute({
     return html`<section><h2>${data.name}</h2><div>${data.role}</div></section>`
   },
 })
+
+export const confirmModal = protectedRoute.reatomRoute({
+  params({ message }: { message?: string }) {
+    return message ? { message } : null
+  },
+  render(self) {
+    return html`<dialog open>${self().message}</dialog>`
+  },
+})
+// confirmModal.go({ message: 'Sure?' }) opens, confirmModal.go() closes.
 
 // App.ts
 const App = computed(() => html`${layoutRoute.render()}`)
@@ -959,18 +992,21 @@ const saveTodo = action(async (todo: Todo) => {
 
 ## Other APIs (not detailed here)
 
-See the full docs: https://v1000.reatom.dev/reference/TOPIC_NAME
+This list is intentionally brief. See the full docs for additional features,
+recipes, adapters, and edge cases: https://v1000.reatom.dev/reference/TOPIC_NAME
 
 Core: **addGlobalExtension**, **withActions**, **withMiddleware**, **withParams**, **bind**, **context**, **clearStack**, **mock**, **anonymizeNames**, **isAtom**, **isAction**, **isComputed**, **isConnected**, **named**
 
 Extensions: **withAbort**, **withMemo**, **withDynamicSubscription**, **withSuspense**, **withSuspenseRetry**, **addChangeHook**, **addCallHook**, **withDisconnectHook**
 
-Methods: **abortVar**, **variable**, **peek**, **schedule**, **retry**, **deatomize**, **reatomLens**, **reatomObservable**, **framePromise**, **getStackTrace**, **isCausedBy**, **retryComputed**
+Methods: **abortVar**, **variable**, **peek**, **schedule**, **retry**, **deatomize**, **reatomLens**, **reatomObservable**, **framePromise**, **getStackTrace**, **isCausedBy**, **retryComputed**. Computed values without dependencies are not reevaluated without `retryComputed`.
 
-Routing extras: **searchParamsAtom**, **withSearchParams**, **urlAtom** hooks, **is404**, **isSomeLoaderPending**
+Routing extras: **searchParamsAtom**, **withSearchParams**, **urlAtom** hooks, link interception config, hash routing, **is404**, **isSomeLoaderPending**
 
 Primitives: **reatomArray**, **reatomBoolean**, **reatomEnum**, **reatomNumber**, **reatomString**, **reatomMap**, **reatomSet**, **reatomRecord**, **reatomLinkedList**
 
 Persistence: **reatomPersist**, **withLocalStorage**, **withSessionStorage**, **withIndexedDb**, **withBroadcastChannel**, **withCookie**, **withCookieStore**, **createMemStorage**
 
 Web: **onLineAtom**, **reatomMediaQuery**, **reatomWebSocket**, **rAF**, **fetch** wrapper
+
+Utils: equality helpers, abort errors, timers, and typed helpers.
