@@ -1,6 +1,6 @@
 ---
 name: reatom
-description: "Use when working with Reatom v1000 (`@reatom/core@1000`), including atoms, computed state, actions, async data, routing, forms, persistence, SSR/testing, React integration, or v3 migration."
+description: "Use when working with Reatom v1001 (`@reatom/core@1001`), including atoms, computed state, actions, async data, routing, forms, persistence, SSR/testing, React integration, or v3 migration."
 ---
 
 # Reatom v1000
@@ -8,14 +8,14 @@ description: "Use when working with Reatom v1000 (`@reatom/core@1000`), includin
 ## Overview
 
 This skill routes Reatom v1000 work to the local handbook. Start with
-`references/reatomv1000.md`, use the smallest matching section, and inspect
+`references/llm.md`, use the smallest matching section, and inspect
 `assets/reatom` only when the handbook is insufficient.
 
 ## When To Use
 
 Use this skill when the task mentions any of the following:
 
-- Reatom or `@reatom/core@1000`
+- Reatom or `@reatom/core@1001`
 - atoms, computed, effect, action, extend, `withComputed`
 - `wrap`, async context, `withAsync`, `withAsyncData`, `withAbort`
 - `atom.set`, identity actions, `setData`, `setUser`, model setter wrappers
@@ -29,7 +29,7 @@ Use this skill when the task mentions any of the following:
 
 ## Workflow
 
-1. Open `references/reatomv1000.md` and jump to the matching section first.
+1. Open `references/llm.md` and jump to the matching section first.
 2. Prefer the handbook's Reatom-native recommendation over generic React state patterns.
 3. Answer from the smallest section that fully covers the question.
 4. If the handbook is missing a needed implementation detail, inspect only the relevant files in `assets/reatom`.
@@ -71,7 +71,7 @@ Use this skill when the task mentions any of the following:
 
 ## Reference Map
 
-- `references/reatomv1000.md`
+- `references/llm.md`
   - `Core primitives and mental model`
   - `withAsync`
   - `wrap rules`
@@ -131,4 +131,5 @@ Inspect the bundled repo only for:
 - Did direct setters stay as `atom.set(...)` instead of pass-through actions?
 - Did route code use loaders/render/outlet for route-scoped lifetime?
 - Did dynamic editable structures use atomization instead of parallel state maps?
+- Did `reatomComponent` read atoms lazily — after early-return guards, not before them?
 - Did the answer cite the reference section used when giving non-obvious advice?

@@ -12,7 +12,7 @@ back to generic React or state-management habits.
 
 1. Ask the scenario prompt without adding extra hints.
 2. Check whether the agent selects the expected Reatom pattern.
-3. If it chooses an anti-pattern, update `SKILL.md` or `reatomv1000.md` with a clearer guardrail.
+3. If it chooses an anti-pattern, update `SKILL.md` or `llm.md` with a clearer guardrail.
 4. Copy the result into `baseline-results.md`.
 
 Record:
