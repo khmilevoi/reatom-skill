@@ -1,4 +1,0 @@
-interface:
-  display_name: "Reatom v1000"
-  short_description: "Handbook for Reatom v1000 async, routing, forms, lifecycle, persistence, migration, and state-modeling best practices"
-  default_prompt: "Use $reatom-v1000 to answer a Reatom v1000 implementation question by consulting the local handbook sections first, preferring atom.set for simple state writes and withActions only for semantic atom-owned methods, then fall back to the bundled upstream repo only for missing detail."
