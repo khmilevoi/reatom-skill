@@ -6,7 +6,7 @@ tools: Read, Grep, Glob
 ---
 
 Audit the changed TypeScript listed in your prompt for violations of the
-**lifecycle** domain rules in `skills/reatom/references/rules.md`.
+**lifecycle** domain rules in `${CLAUDE_PLUGIN_ROOT}/skills/reatom/references/rules.md`.
 
 Read the registry first. Your rules are those with `domain: lifecycle`
 (RTM-L01, RTM-L02). Ignore every other domain — other auditors own them.

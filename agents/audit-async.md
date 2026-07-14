@@ -6,7 +6,7 @@ tools: Read, Grep, Glob
 ---
 
 Audit the changed TypeScript listed in your prompt for violations of the
-**async** domain rules in `skills/reatom/references/rules.md`.
+**async** domain rules in `${CLAUDE_PLUGIN_ROOT}/skills/reatom/references/rules.md`.
 
 Read the registry first. Your rules are those with `domain: async`
 (RTM-A01 … RTM-A06). Ignore every other domain — other auditors own them.

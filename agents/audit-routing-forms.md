@@ -6,7 +6,7 @@ tools: Read, Grep, Glob
 ---
 
 Audit the changed TypeScript listed in your prompt for violations of the
-**routing-forms** domain rules in `skills/reatom/references/rules.md`.
+**routing-forms** domain rules in `${CLAUDE_PLUGIN_ROOT}/skills/reatom/references/rules.md`.
 
 Read the registry first. Your rules are those with `domain: routing-forms`
 (RTM-R01 … RTM-R04). Ignore every other domain — other auditors own them.

@@ -6,7 +6,7 @@ tools: Read, Grep, Glob
 ---
 
 Audit the changed TypeScript listed in your prompt for violations of the
-**react** domain rules in `skills/reatom/references/rules.md`.
+**react** domain rules in `${CLAUDE_PLUGIN_ROOT}/skills/reatom/references/rules.md`.
 
 Read the registry first. Your rules are those with `domain: react`
 (RTM-C01, RTM-C02). Ignore every other domain — other auditors own them.

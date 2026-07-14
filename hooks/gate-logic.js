@@ -48,7 +48,7 @@ function buildReason(files) {
     AUDITORS.map((a) => `  - ${a}`).join('\n'),
     '',
     'Each auditor reads the rule registry at',
-    'skills/reatom/references/rules.md and reports findings for its own domain only.',
+    '${CLAUDE_PLUGIN_ROOT}/skills/reatom/references/rules.md and reports findings for its own domain only.',
     '',
     'Then, for every finding: fix it, or dismiss it with a written rationale.',
     'Finish with a line "Audit: N findings, M fixed, K dismissed" and spell out',

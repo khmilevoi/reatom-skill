@@ -2,7 +2,7 @@
 description: Audit Reatom code against the rule registry with five parallel read-only domain auditors
 ---
 
-Audit Reatom code in this repository against `skills/reatom/references/rules.md`.
+Audit Reatom code in this repository against `${CLAUDE_PLUGIN_ROOT}/skills/reatom/references/rules.md`.
 
 ## Scope
 
