@@ -1,0 +1,10 @@
+{
+  "name": "reatom-claude-plugin",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Development scripts and tests for the reatom Claude Code plugin",
+  "scripts": {
+    "test": "node --test development/tests",
+    "sync-upstream": "node development/sync-upstream.js"
+  }
+}
