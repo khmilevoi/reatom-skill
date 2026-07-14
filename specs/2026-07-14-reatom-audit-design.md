@@ -98,7 +98,7 @@ synced, and the field log can be destroyed by a re-sync.
 | Trigger | `Stop` hook in `~/.claude/settings.json` |
 | Gate | Project-level: `@reatom/*` in any `package.json` |
 | Scope | `merge-base(HEAD, main)..HEAD` + working tree; all changed `.ts`/`.tsx` |
-| Auditors | 4 domain agents, read-only, dispatched in parallel |
+| Auditors | 5 domain agents (4 core + 1 adapter), read-only, dispatched in parallel |
 | Findings | Block the stop; findings returned to the agent |
 | Rules | Single registry: `references/rules.md` |
 | Termination | Receipt keyed by content hash + max 3 iterations, fail-open |
@@ -140,7 +140,7 @@ reatom-audit.sh  (deterministic, no LLM)
   └─ otherwise ──────────────────────────► exit 2 + dispatch instructions
                                               │
                                               ▼
-                              main agent dispatches 4 read-only auditors
+                              main agent dispatches 5 read-only auditors
                               (briefs: agents/audit-*.md, rules: references/rules.md)
                                               │
                                               ▼
@@ -247,17 +247,32 @@ rules change monthly; a generator would not pay for itself.
 
 ### Domain auditors
 
-Four fixed briefs in `agents/audit-*.md`. Each owns one rule group and reads the
+Five fixed briefs in `agents/audit-*.md`. Each owns one rule group and reads the
 whole changed set through that lens. Cost scales with domains, not files.
 
-| Agent | Rules owned | Library inventory (for reinvention checks) |
-| --- | --- | --- |
-| `audit-async` | fetch mechanism, `wrap` boundaries, cancellation, debounce, sampling | `withAsyncData`, `withAsync`, `withAbort`, `wrap`, `sleep`, `onEvent` |
-| `audit-state` | `atom.set` vs setter actions, atomization, dependent state | `atom.set`, `withComputed`, field atomization, model factories |
-| `audit-lifecycle` | timers, subscriptions, listeners, connection-bound effects | `withConnectHook`, `withDisconnectHook`, `withChangeHook` |
-| `audit-react-routing` | lazy reads, hook orchestration, routes, forms, persistence | `reatomComponent`, `reatomRoute` loader/render, `reatomField`, `withSearchParams`, `withLocalStorage` |
+The split mirrors the library's own architecture rather than an ad-hoc grouping.
+Reatom is framework-agnostic: `reatomRoute` lives in `packages/core/src/routing`,
+forms in `core/src/form`, persistence in `core/src/persist`, and rendering is an
+abstraction (`core/src/reatomAbstractRender.ts`) that nine adapters implement
+(`react`, `vue`, `solid-js`, `lit`, `preact`, `jsx`, …). The React adapter is a
+thin layer — `reatomComponent.ts`, `hooks.ts`, `bindField.ts`,
+`reatomFactoryComponent.ts` — and does not re-export routing.
 
-Naming hygiene is not a fifth agent; each auditor checks naming for the
+| Agent | Rules owned | Library inventory (for reinvention checks) | Source |
+| --- | --- | --- | --- |
+| `audit-async` | fetch mechanism, `wrap` boundaries, cancellation, debounce, sampling | `withAsyncData`, `withAsync`, `withAbort`, `wrap`, `sleep`, `onEvent` | `core/src/async`, `core/src/methods` |
+| `audit-state` | `atom.set` vs setter actions, atomization, dependent writable state | `atom.set`, `withComputed`, field atomization, model factories | `core/src/{core,primitives,extensions}` |
+| `audit-lifecycle` | timers, subscriptions, listeners, connection-bound side effects | `withConnectHook`, `withDisconnectHook`, `withChangeHook` | `core/src/extensions` |
+| `audit-routing-forms` | route data lifetime, forms, persistence, URL state | `reatomRoute` loader/render/outlet, `reatomField`, `reatomForm`, `withSearchParams`, `withLocalStorage` | `core/src/{routing,form,persist}` |
+| `audit-react` | lazy atom reads, hook orchestration, component boundaries | `reatomComponent`, collapsing hooks into `computed` | `packages/react` |
+
+**Only `audit-react` is adapter-bound.** The other four audit framework-agnostic
+core usage and are unaffected by the view layer. This makes the adapter auditor a
+slot: a Vue or Solid project swaps `audit-react` for its own and keeps the rest.
+Which adapter brief runs is chosen from the installed `@reatom/<adapter>` package;
+only the React brief is implemented now.
+
+Naming hygiene is not a sixth agent; each auditor checks naming for the
 constructs it owns.
 
 Auditors are **read-only** (`Read`, `Grep`, `Glob`; no `Edit`). Four agents
@@ -344,7 +359,8 @@ with IDs; add the consistency check.
 `settings.json` entry. Test the decision table first — a hook that silently always
 exits 0 looks perfectly healthy while doing nothing.
 
-**Step 3 — auditors.** Four briefs in `agents/audit-*.md`.
+**Step 3 — auditors.** Five briefs in `agents/audit-*.md` (four core-domain, one
+adapter).
 
 **Step 4 — fixtures and calibration.** Then `/reatom-audit`.
 
@@ -387,7 +403,7 @@ to read the expected rule IDs from the fixture directory.
 | Main agent under-reports auditor findings | Fixed briefs in files; dismissals surfaced to the user; hash-keyed re-audit |
 | Audit loop deadlocks a session | Hash-keyed receipt + 3-iteration cap + fail-open |
 | Repo/installed divergence silently strands fixes | Step 0.5 before anything else |
-| Large diffs make the audit expensive | Domain split caps cost at 4 agents regardless of file count |
+| Large diffs make the audit expensive | Domain split caps cost at 5 agents regardless of file count |
 | `stop_hook_active` semantics undocumented | Not relied upon; own counter instead |
 
 ## Open questions
