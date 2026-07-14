@@ -1,0 +1,10 @@
+upstream: reatom/reatom
+branch:   v1001
+commit:   af2f81f41da1e7f3cd815538d39c92cf4085a586
+synced:   2026-07-14
+
+sha256 of each source file at that commit:
+  core.md    64dd16e519994232a62817aaa8926e089aaa92d42e98d492ca16da37ddb34d21  skills/reatom/REFERENCE.md
+  async.md   bbefc8de5073b2077e3d62968c007347b04bb4ed341050acfa016e91f46e9f66  skills/reatom-async/REFERENCE.md
+  jsx.md     9a2c877274401bfb30db88eaec1cbe88ad69d945716ba60498e63a130efa161d  skills/reatom-jsx/REFERENCE.md
+  review.md  9d6a07ba5592c76520d4c120e15384721f610a536f79ff950df070367fb78e49  skills/reatom-review/SKILL.md
