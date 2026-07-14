@@ -3,13 +3,13 @@ name: reatom
 description: "Use when working with Reatom v1001 (`@reatom/core@1001`), including atoms, computed state, actions, async data, routing, forms, persistence, SSR/testing, React integration, or v3 migration."
 ---
 
-# Reatom v1000
+# Reatom v1001
 
 ## Overview
 
-This skill routes Reatom v1000 work to the local handbook. Start with
-`references/llm.md`, use the smallest matching section, and inspect
-`assets/reatom` only when the handbook is insufficient.
+This skill routes Reatom v1001 work through three sources, in order: our defaults in
+`references/rules.md`, the vendored upstream handbook in `references/upstream/`, and
+the Reatom the project actually installed in its own `node_modules`.
 
 ## When To Use
 
@@ -29,12 +29,27 @@ Use this skill when the task mentions any of the following:
 
 ## Workflow
 
-1. Open `references/llm.md` and jump to the matching section first.
-2. Prefer the handbook's Reatom-native recommendation over generic React state patterns.
-3. Answer from the smallest section that fully covers the question.
-4. If the handbook is missing a needed implementation detail, inspect only the relevant files in `assets/reatom`.
-5. Load only the specific docs, packages, or examples needed for the current question.
-6. Keep answers concise, but call out best practices, anti-patterns, and tricky parts explicitly.
+1. Apply `references/rules.md`. It is policy and it is binding.
+2. Answer from the smallest matching section of `references/upstream/`.
+3. For API detail the handbook does not settle, read the project's own
+   `node_modules/@reatom/*` — see Source Map.
+4. Prefer the Reatom-native shape over generic React state patterns.
+5. Keep answers concise, but call out best practices, anti-patterns, and tricky parts
+   explicitly, citing the section you used.
+
+## Source Precedence
+
+The vendored handbook is a point-in-time copy. The project's `node_modules` is what its
+code actually runs against.
+
+**When `references/upstream/` and the installed `.d.ts` disagree, the installed `.d.ts`
+wins.** Check `@reatom/core`'s version in the project's `package.json` against
+`references/upstream/VERSION`, and say so out loud when the major differs. If the project
+has no `node_modules/@reatom/*`, say the version could not be confirmed rather than
+guessing.
+
+`references/rules.md` states policy, not API facts, so it does not conflict with the
+types and stays binding either way.
 
 ## Default Decisions
 
@@ -78,11 +93,22 @@ Use this skill when the task mentions any of the following:
 
 ## Reference Map
 
-- `references/llm.md`
+- `references/rules.md`
+  - The rule registry: one entry per rule with id, domain, kind, bad/good examples,
+    detection criteria, and exceptions. Cited by the audit agents. This file is the
+    source of truth for the Default Decisions above.
+- `references/react-guide.md`
+  - `React-to-Reatom decision guide`
+  - `Before/after: enabled flags and async queries`
+- `references/atomization-notes.md`
+  - `Atomization notes`
+- `references/golden-example.md`
+  - One source-backed React/Reatom example combining the main default patterns
+- `references/upstream/core.md`
+  - `Goal and fit`
   - `Core primitives and mental model`
   - `withAsync`
   - `**wrap** rules`
-  - `React-to-Reatom decision guide`
   - `Primitives quick usage`
   - `Atomization`
   - `Lifecycle and extension hooks`
@@ -95,46 +121,48 @@ Use this skill when the task mentions any of the following:
   - `Transactions notes`
   - `SSR and testing`
   - `v3 migration highlights`
-  - `Other APIs`
-- `references/rules.md`
-  - The rule registry: one entry per rule with id, domain, kind, bad/good
-    examples, detection criteria, and exceptions. Cited by the audit agents.
-- `references/upstream-getting-started.md`
-  - Raw upstream Getting Started export; consult only after `llm.md`, and prefer
-    the handbook whenever the two disagree — this file predates the skill's
-    defaults and shows manual loading atoms.
-- `references/test-scenarios.md`
-  - Pressure scenarios for checking whether agents apply the skill's defaults
-- `references/baseline-results.md`
-  - Result log for pressure-scenario failures, rationalizations, and follow-up doc changes
-- `references/golden-example.md`
-  - One source-backed React/Reatom example combining the main default patterns
-- `assets/reatom`
-  - Upstream repo for source, longer docs, and examples when the handbook is not enough
+- `references/upstream/async.md`
+  - `Choosing the Primitive`
+  - `withAsyncData`
+  - `wrap Rules`
+  - `withAbort`
+  - `abortVar and Fetch Signals`
+  - `Sampling and Procedural Async`
+  - `Status, Retry, Reset`
+  - `Cache Order`
+  - `Suspense Boundaries`
+  - `Common Mistakes`
+- `references/upstream/jsx.md`
+  - `Reference`
+  - `Utilities`
+  - `TypeScript`
+  - `Limitations`
+- `references/upstream/review.md`
+  - `Mandatory Checks`
+  - `Typical Mismatches And Fixes`
+  - `Identity Action`
+  - `Atom Factory Named Like A Getter`
 
 ## Source Map
 
-- Core docs: `assets/reatom/docs/src/content/docs/start/`
-- Async context: `assets/reatom/docs/src/content/docs/handbook/async-context.md`
-- Async resources: `assets/reatom/docs/src/content/docs/handbook/async.md`
-- Atomization: `assets/reatom/docs/src/content/docs/handbook/atomization.md`
-- Sampling/debounce: `assets/reatom/docs/src/content/docs/handbook/sampling.md`
-- Routing: `assets/reatom/docs/src/content/docs/handbook/routing.md`
-- Forms: `assets/reatom/docs/src/content/docs/handbook/forms/`
-- Persistence: `assets/reatom/docs/src/content/docs/handbook/persist.md`
-- React adapter: `assets/reatom/packages/react/src/`
-- ESLint rules: `assets/reatom/packages/eslint-plugin/src/rules/`
-- Search example: `assets/reatom/examples/react-search/src/components/search/`
+`references/upstream/` is vendored from `reatom/reatom`; see its `VERSION` for the pin.
+Everything below is in the **project's own** `node_modules`, not in this plugin.
 
-## When To Inspect `assets/reatom`
+- API signatures and JSDoc: `node_modules/@reatom/core/dist/index.d.ts`
+- React adapter: `node_modules/@reatom/react/README.md` — the package's `.d.ts` is thin
+- JSX adapter: `node_modules/@reatom/jsx/dist/index.d.ts` and `README.md`
+- Installed version: the project's `package.json`
 
-Inspect the bundled repo only for:
+`node_modules/@reatom/core/README.md` is install notes, not the handbook. Use the `.d.ts`.
 
-- API signature uncertainty not resolved by the handbook.
+## When To Inspect `node_modules`
+
+Read the installed package for:
+
+- API signature uncertainty the handbook does not resolve.
+- Any question where the installed version might differ from `upstream/VERSION`.
 - Adapter-specific behavior for React, Preact, Vue, Solid, Lit, or JSX.
-- Forms details not covered by the summary, especially field arrays.
 - Source-level behavior around abort, routing, persistence, SSR, or testing.
-- Real examples needed to match project style.
 
 ## Validation Checklist
 

@@ -152,3 +152,44 @@ test('every rule ref resolves to a real heading in a real file', () => {
   }
   assert.deepEqual(broken, [], `refs do not resolve: ${broken.join(' | ')}`)
 })
+
+// A "- `references/x.md`" bullet followed by indented "  - `Section`" bullets.
+function referenceMap(skillText) {
+  const promised = []
+  let current = null
+  for (const line of skillText.split('\n')) {
+    const file = line.match(/^- `(references\/[^`]+)`\s*$/)
+    if (file) {
+      current = file[1]
+      continue
+    }
+    const section = line.match(/^\s+- `([^`]+)`\s*$/)
+    if (section && current) promised.push({ file: current, section: section[1] })
+    else if (/^\S/.test(line)) current = null
+  }
+  return promised
+}
+
+test('every section the Reference Map promises exists in the file it names', () => {
+  const skill = read('SKILL.md')
+  const promised = referenceMap(skill)
+  assert.ok(promised.length >= 10, `expected a populated Reference Map, got ${promised.length}`)
+
+  const missing = promised
+    .filter(({ file, section }) => {
+      const full = path.join(SKILL_DIR, file)
+      if (!fs.existsSync(full)) return true
+      return !headings(fs.readFileSync(full, 'utf8')).includes(section)
+    })
+    .map(({ file, section }) => `${file}#${section}`)
+
+  assert.deepEqual(missing, [], `Reference Map promises missing sections: ${missing.join(' | ')}`)
+})
+
+test('SKILL.md points at node_modules and not at a bundled repo', () => {
+  const skill = read('SKILL.md')
+  assert.ok(!skill.includes('assets/reatom'), 'the bundled repo is gone')
+  assert.ok(!skill.includes('llm.md'), 'the fork is gone')
+  assert.ok(skill.includes('node_modules/@reatom/core/dist/index.d.ts'), 'core types are cited')
+  assert.ok(!/v1000/.test(skill), 'the skill is v1001')
+})

@@ -1,13 +1,13 @@
 ---
-title: 'Reatom v1000 golden example'
-description: 'One source-backed example combining the main Reatom v1000 defaults'
+title: 'Reatom v1001 golden example'
+description: 'One source-backed example combining the main Reatom v1001 defaults'
 ---
 
-# Reatom v1000 Golden Example
+# Reatom v1001 Golden Example
 
 This example is based on the upstream search pattern in
-`assets/reatom/examples/react-search/src/components/search/model.ts` and
-`assets/reatom/examples/react-search/src/components/search/SearchBar.tsx`.
+[`examples/react-search/src/components/search/model.ts`](https://github.com/reatom/reatom/blob/af2f81f41da1e7f3cd815538d39c92cf4085a586/examples/react-search/src/components/search/model.ts) and
+[`examples/react-search/src/components/search/SearchBar.tsx`](https://github.com/reatom/reatom/blob/af2f81f41da1e7f3cd815538d39c92cf4085a586/examples/react-search/src/components/search/SearchBar.tsx).
 
 It demonstrates the default choices this skill should push agents toward:
 
