@@ -1,2 +1,4 @@
-docs
-/
+.claude/scheduled_tasks.lock
+development/upstream/
+docs/
+node_modules/
