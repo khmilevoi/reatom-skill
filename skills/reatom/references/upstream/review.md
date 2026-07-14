@@ -1,10 +1,6 @@
 <!-- VENDORED reatom/reatom@af2f81f4 (v1001) skills/reatom-review/SKILL.md
      DO NOT EDIT. Regenerate: node development/sync-upstream.js -->
 
----
-name: reatom-review
-description: Reviews code, docs, examples, and agent-produced changes that use Reatom. Use when reviewing Reatom pull requests, examples, migrations, model files, async flows, routing, forms, persistence, or documentation that claims Reatom behavior.
----
 
 # Reatom Review
 

@@ -62,7 +62,7 @@ function main() {
   ]
 
   for (const { from, to } of SOURCES) {
-    const source = fs.readFileSync(path.join(CLONE, from), 'utf8')
+    const source = fs.readFileSync(path.join(CLONE, from), 'utf8').replace(/\r\n/g, '\n')
     const digest = crypto.createHash('sha256').update(source).digest('hex')
     const banner =
       `<!-- VENDORED reatom/reatom@${short} (${branch}) ${from}\n` +

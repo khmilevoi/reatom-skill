@@ -32,7 +32,7 @@ test('every vendored file carries the banner and is recorded in VERSION', () => 
 
 test('the vendored review keeps no skill frontmatter and no dead relative links', () => {
   const review = fs.readFileSync(path.join(UPSTREAM_DIR, 'review.md'), 'utf8')
-  assert.doesNotMatch(review, /^---\nname: reatom-review/m, 'frontmatter declaring a skill was stripped')
+  assert.doesNotMatch(review, /^---\r?\nname: reatom-review/m, 'frontmatter declaring a skill was stripped')
   assert.ok(!review.includes('](../reatom/REFERENCE.md)'), 'relative links were repointed')
   assert.ok(review.includes('](./core.md)'), 'links now resolve inside references/upstream')
 })
