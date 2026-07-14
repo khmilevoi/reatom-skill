@@ -6,7 +6,7 @@ TypeScript against a rule registry before a session can finish.
 ## Install
 
 ```bash
-claude plugin marketplace add khmilevoi/reatom
+claude plugin marketplace add khmilevoi/reatom-skill
 claude plugin install reatom@reatom
 ```
 
