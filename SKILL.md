@@ -74,13 +74,13 @@ Use this skill when the task mentions any of the following:
 - `references/llm.md`
   - `Core primitives and mental model`
   - `withAsync`
-  - `wrap rules`
+  - `**wrap** rules`
   - `React-to-Reatom decision guide`
   - `Primitives quick usage`
   - `Atomization`
   - `Lifecycle and extension hooks`
   - `Event sampling and orchestration`
-  - `Memoization: memo and memoKey`
+  - `Memoization: **memo** and **memoKey**`
   - `Forms: base usage and reactive validation`
   - `Routing`
   - `URL sync and persistence helpers`
@@ -89,6 +89,10 @@ Use this skill when the task mentions any of the following:
   - `SSR and testing`
   - `v3 migration highlights`
   - `Other APIs`
+- `references/upstream-getting-started.md`
+  - Raw upstream Getting Started export; consult only after `llm.md`, and prefer
+    the handbook whenever the two disagree — this file predates the skill's
+    defaults and shows manual loading atoms.
 - `references/test-scenarios.md`
   - Pressure scenarios for checking whether agents apply the skill's defaults
 - `references/baseline-results.md`
