@@ -131,3 +131,24 @@ test('SKILL.md and rules.md reference exactly the same rule ids', () => {
   assert.deepEqual(missingFromSkill, [], 'every registry rule is tagged in SKILL.md')
   assert.deepEqual(unknownInSkill, [], 'SKILL.md cites no rule absent from the registry')
 })
+
+const REF = /^- ref: ([^#\n]+)#(.+)$/gm
+
+test('every rule ref resolves to a real heading in a real file', () => {
+  const rules = read('references', 'rules.md')
+  const refs = [...rules.matchAll(REF)].map((m) => ({ file: m[1].trim(), anchor: m[2].trim() }))
+  assert.ok(refs.length >= 15, `expected a populated ref set, got ${refs.length}`)
+
+  const cache = new Map()
+  const broken = []
+  for (const { file, anchor } of refs) {
+    if (!cache.has(file)) {
+      const full = path.join(SKILL_DIR, 'references', file)
+      cache.set(file, fs.existsSync(full) ? headings(fs.readFileSync(full, 'utf8')) : null)
+    }
+    const found = cache.get(file)
+    if (found === null) broken.push(`${file} (no such file)`)
+    else if (!found.includes(anchor)) broken.push(`${file}#${anchor}`)
+  }
+  assert.deepEqual(broken, [], `refs do not resolve: ${broken.join(' | ')}`)
+})
