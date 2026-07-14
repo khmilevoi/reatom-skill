@@ -1,0 +1,11 @@
+{
+  "violations": {
+    "polling-timer.ts": ["RTM-L01"],
+    "enabled-flags.ts": ["RTM-C02", "RTM-A03"],
+    "identity-setter.ts": ["RTM-S01"],
+    "manual-debounce.ts": ["RTM-A05"],
+    "unwrapped-then.ts": ["RTM-A04", "RTM-A03", "RTM-A06"],
+    "useState-pending.tsx": ["RTM-A02"]
+  },
+  "clean": ["skills/reatom/references/golden-example.md"]
+}
