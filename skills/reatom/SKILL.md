@@ -38,14 +38,21 @@ Use this skill when the task mentions any of the following:
 
 ## Default Decisions
 
-- Query/read data: use `computed(async () => ...).extend(withAsyncData(...))`.
-- Mutations/commands: use `action(async () => ...).extend(withAsync(...))`.
-- Async boundaries: use `wrap(...)` for promises and callbacks that touch Reatom.
-- Local state updates: prefer direct `atom.set(...)`; avoid identity setter actions.
-- Writable dependent state: use `withComputed(...)` instead of React `key` resets or sync effects.
-- Editable nested data: atomize mutable fields and keep readonly fields plain.
-- Routes: use `reatomRoute` loaders and `render`; avoid manual `route.match()` component branching.
-- URL filters and preferences: use `withSearchParams` and persistence extensions.
+- Query/read data: use `computed(async () => ...).extend(withAsyncData(...))`. (RTM-A01)
+- Mutations/commands: use `action(async () => ...).extend(withAsync(...))`. (RTM-A02, RTM-A03)
+- Async boundaries: use `wrap(...)` for promises and callbacks that touch Reatom. (RTM-A04, RTM-A06)
+- Debounce: `await wrap(sleep(ms))` inside an async action, not timers. (RTM-A05)
+- Local state updates: prefer direct `atom.set(...)`; avoid identity setter actions. (RTM-S01)
+- Writable dependent state: use `withComputed(...)` instead of React `key` resets or sync effects. (RTM-S02)
+- Editable nested data: atomize mutable fields and keep readonly fields plain. (RTM-S03)
+- Grouped UI transitions: expose a named model action rather than several sets in a handler. (RTM-S04)
+- Long-lived side effects: own timers, listeners and subscriptions with `withConnectHook(...)` returning a cleanup. (RTM-L01, RTM-L02)
+- Routes: use `reatomRoute` loaders and `render`; avoid manual `route.match()` component branching. (RTM-R01)
+- URL filters and preferences: use `withSearchParams` and persistence extensions. (RTM-R02, RTM-R03)
+- Forms: use `reatomField`, `reatomFieldSet`, and `reatomForm`. (RTM-R04)
+- React reads: read atoms lazily, after early-return guards. (RTM-C01)
+- React orchestration: collapse hook coordination into one `computed(async)`. (RTM-C02)
+- Naming: name every atom, computed, action, and route. (RTM-S05)
 
 ## Quick Reference
 
@@ -89,6 +96,9 @@ Use this skill when the task mentions any of the following:
   - `SSR and testing`
   - `v3 migration highlights`
   - `Other APIs`
+- `references/rules.md`
+  - The rule registry: one entry per rule with id, domain, kind, bad/good
+    examples, detection criteria, and exceptions. Cited by the audit agents.
 - `references/upstream-getting-started.md`
   - Raw upstream Getting Started export; consult only after `llm.md`, and prefer
     the handbook whenever the two disagree — this file predates the skill's
