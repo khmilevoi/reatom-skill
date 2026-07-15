@@ -193,3 +193,34 @@ test('SKILL.md points at node_modules and not at a bundled repo', () => {
   assert.ok(skill.includes('node_modules/@reatom/core/dist/index.d.ts'), 'core types are cited')
   assert.ok(!/v1000/.test(skill), 'the skill is v1001')
 })
+
+function markdownFiles(dir, skipDir) {
+  const out = []
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name)
+    if (entry.isDirectory()) { if (full !== skipDir) out.push(...markdownFiles(full, skipDir)) }
+    else if (entry.name.endsWith('.md')) out.push(full)
+  }
+  return out
+}
+
+const LINK = /\[[^\]]*\]\(([^)]+)\)/g
+
+// references/upstream/** is vendored (DO NOT EDIT, regenerated only by
+// development/sync-upstream.js). A dead link inside it is unactionable without
+// hand-editing the vendor, so it is excluded from this walk.
+test('every relative link under skills/ resolves to a real file', () => {
+  const files = markdownFiles(path.join(ROOT, 'skills'), UPSTREAM_DIR)
+  const broken = []
+  for (const file of files) {
+    const text = fs.readFileSync(file, 'utf8')
+    for (const [, target] of text.matchAll(LINK)) {
+      if (/^(https?:|mailto:)/.test(target) || target.startsWith('#')) continue
+      const clean = target.trim().split('#')[0]
+      if (clean && !fs.existsSync(path.join(path.dirname(file), clean))) {
+        broken.push(`${path.relative(ROOT, file)} -> ${target}`)
+      }
+    }
+  }
+  assert.deepEqual(broken, [], `broken relative links: ${broken.join(' | ')}`)
+})
