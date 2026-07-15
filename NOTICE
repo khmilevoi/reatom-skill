@@ -5,8 +5,9 @@ This plugin vendors documentation from the Reatom project.
 Those files are copied verbatim from https://github.com/reatom/reatom
 (branch v1001). See skills/reatom/references/upstream/VERSION for the exact
 commit and per-file checksums. They are not modified by hand; see
-development/sync-upstream.js for the two mechanical transforms applied to
-review.md.
+development/sync-upstream.js for the three mechanical transforms: CRLF to LF
+normalization (all four files, so output byte-matches upstream's git blob),
+plus frontmatter removal and a relative-link rewrite (review.md only).
 
 Reatom is distributed under the MIT License:
 

@@ -1,6 +1,6 @@
 ---
 title: 'Reatom skill pressure scenarios'
-description: 'Scenarios for checking whether agents apply the Reatom v1000 skill defaults'
+description: 'Scenarios for checking whether agents apply the Reatom v1001 skill defaults'
 ---
 
 # Reatom Skill Pressure Scenarios
@@ -12,7 +12,7 @@ back to generic React or state-management habits.
 
 1. Ask the scenario prompt without adding extra hints.
 2. Check whether the agent selects the expected Reatom pattern.
-3. If it chooses an anti-pattern, update `SKILL.md` or `llm.md` with a clearer guardrail.
+3. If it chooses an anti-pattern, update `SKILL.md` or `references/rules.md` with a clearer guardrail.
 4. Copy the result into `baseline-results.md`.
 
 Record:
@@ -37,7 +37,7 @@ Expected:
 
 Source-backed note:
 
-- The upstream search example in `assets/reatom/examples/react-search/src/components/search/model.ts` uses `computed(async)`, `wrap(sleep(250))`, and `withAsyncData()` for this shape.
+- The upstream search example in [`examples/react-search/src/components/search/model.ts`](https://github.com/reatom/reatom/blob/af2f81f41da1e7f3cd815538d39c92cf4085a586/examples/react-search/src/components/search/model.ts) uses `computed(async)`, `wrap(sleep(250))`, and `withAsyncData()` for this shape.
 
 Failure signs:
 

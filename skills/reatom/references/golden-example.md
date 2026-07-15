@@ -135,7 +135,8 @@ export const UsersSearch = reatomComponent(() => {
 Notes:
 
 - `usersResource` is lazy and only fetches while connected.
-- `withAsyncData` provides `data`, `ready`, `error`, `retry`, `reset`, and `status`.
+- `withAsyncData` provides `data`, `ready`, `error`, `retry`, and `reset`.
+  `.status()` is opt-in — it exists only with `withAsyncData({ status: true })`.
 - `withAsyncData` includes abort behavior, so quick search changes do not race stale responses.
 - The component uses direct `atom.set` for local assignments; no identity setter actions are needed.
 - Row-level mutable state lives in each item model instead of parallel maps like `selectedIds`.

@@ -2,8 +2,11 @@
 // Copies the upstream agent-skill references into skills/reatom/references/upstream/.
 // The clone is development-only and gitignored; see development/README.md.
 //
-// Verbatim means no hand edits. This script applies exactly two declared
-// transforms, both to review.md, and nothing else.
+// Verbatim means no hand edits. This script applies exactly three declared
+// transforms: CRLF-to-LF normalization on all four files (it canonicalizes a
+// checkout artifact, making output byte-match upstream's git blob -- more
+// verbatim, not less), plus frontmatter removal and a relative-link rewrite,
+// both scoped to review.md only.
 
 const fs = require('node:fs')
 const path = require('node:path')

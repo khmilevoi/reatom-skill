@@ -51,6 +51,10 @@ guessing.
 `references/rules.md` states policy, not API facts, so it does not conflict with the
 types and stays binding either way.
 
+`references/golden-example.md` is our illustration of the defaults above, not a fourth
+source. On any API question it is subordinate to the handbook and the installed types;
+prefer those when the example's prose and the handbook disagree.
+
 ## Default Decisions
 
 - Query/read data: use `computed(async () => ...).extend(withAsyncData(...))`. (RTM-A01)
