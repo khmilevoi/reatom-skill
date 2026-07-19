@@ -56,4 +56,38 @@ function buildReason(files) {
   ].join('\n')
 }
 
-module.exports = { computeMarker, auditableFiles, gateDecision }
+const DOMAINS = ['async', 'state', 'lifecycle', 'routing-forms', 'react']
+
+// Broader than the union of all triggers on purpose: a file matching SURFACE but
+// no trigger is auditable code the table does not recognise, and it must reach
+// every auditor rather than be dropped.
+const SURFACE = [
+  'atom', 'computed', 'action', 'effect(', 'reatom',
+  'useState', 'useEffect', 'useMemo', 'useCallback', 'useRef',
+  'await', 'async ', 'Promise', '.then(', 'subscribe',
+  'addEventListener', 'setInterval', 'setTimeout',
+  'localStorage', 'sessionStorage', 'fetch(', 'window.', 'document.'
+]
+
+function buildTriggers(rulesText) {
+  const triggers = Object.fromEntries(DOMAINS.map((d) => [d, new Set()]))
+  for (const block of rulesText.split(/^### /m).slice(1)) {
+    const domain = (block.match(/^- domain: (.+)$/m) || [])[1]
+    const line = (block.match(/^- trigger: (.+)$/m) || [])[1]
+    if (!domain || !line || !triggers[domain]) continue
+    for (const token of line.split(',').map((t) => t.trim()).filter(Boolean)) {
+      triggers[domain].add(token)
+    }
+  }
+  return Object.fromEntries(DOMAINS.map((d) => [d, [...triggers[d]]]))
+}
+
+function routeFile(filePath, contents, triggers) {
+  if (!SURFACE.some((token) => contents.includes(token))) return []
+  const matched = DOMAINS.filter((d) => triggers[d].some((token) => contents.includes(token)))
+  if (matched.length === 0) return [...DOMAINS]
+  if (/\.tsx$/.test(filePath) && !matched.includes('react')) matched.push('react')
+  return DOMAINS.filter((d) => matched.includes(d))
+}
+
+module.exports = { computeMarker, auditableFiles, gateDecision, DOMAINS, SURFACE, buildTriggers, routeFile }

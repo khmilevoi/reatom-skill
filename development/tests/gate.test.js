@@ -1,6 +1,12 @@
 const { test } = require('node:test')
 const assert = require('node:assert/strict')
+const fs = require('node:fs')
+const os = require('node:os')
+const path = require('node:path')
+const { spawnSync } = require('node:child_process')
 const { computeMarker, auditableFiles, gateDecision } = require('../../hooks/gate-logic')
+
+const GATE = path.join(__dirname, '..', '..', 'hooks', 'reatom-gate.js')
 
 const base = {
   stopHookActive: false,
@@ -64,13 +70,6 @@ test('the block reason truncates very long file lists', () => {
   const { reason } = gateDecision({ ...base, auditableFiles: many })
   assert.match(reason, /and 10 more/)
 })
-
-const fs = require('node:fs')
-const os = require('node:os')
-const path = require('node:path')
-const { spawnSync } = require('node:child_process')
-
-const GATE = path.join(__dirname, '..', '..', 'hooks', 'reatom-gate.js')
 
 function makeRepo({ reatom = true, changed = 'src/model.ts' } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'reatom-gate-'))
@@ -159,4 +158,58 @@ test('integration: a non-git directory allows silently', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'reatom-nogit-'))
   fs.writeFileSync(path.join(dir, 'package.json'), '{"dependencies":{"@reatom/core":"1001.0.0"}}')
   assert.equal(runGate(dir).stdout.trim(), '')
+})
+
+const { buildTriggers, routeFile } = require('../../hooks/gate-logic')
+
+const RULES = fs.readFileSync(
+  path.join(__dirname, '..', '..', 'skills', 'reatom', 'references', 'rules.md'),
+  'utf8'
+)
+const TRIGGERS = buildTriggers(RULES)
+
+test('buildTriggers unions each domain rules tokens', () => {
+  assert.ok(TRIGGERS.async.includes('useEffect'), 'async inherits RTM-A01')
+  assert.ok(TRIGGERS.lifecycle.includes('setInterval'), 'lifecycle inherits RTM-L01')
+  assert.ok(!TRIGGERS.lifecycle.includes('useEffect'), 'domains do not leak into each other')
+  for (const domain of ['async', 'state', 'lifecycle', 'routing-forms', 'react']) {
+    assert.ok(TRIGGERS[domain].length > 0, `${domain} has triggers`)
+  }
+})
+
+test('an inert file routes nowhere', () => {
+  const contents = 'import { execSync } from "node:child_process"\nexport const run = () => execSync("tsc")\n'
+  assert.deepEqual(routeFile('scripts/bench.ts', contents, TRIGGERS), [])
+})
+
+test('a file with surface but no trigger falls back to every auditor', () => {
+  const contents = 'import { useMemo } from "react"\nexport const useThing = () => useMemo(() => 1, [])\n'
+  assert.deepEqual(routeFile('src/x.ts', contents, TRIGGERS), [
+    'async', 'state', 'lifecycle', 'routing-forms', 'react'
+  ])
+})
+
+test('a useEffect fetch with no reatom import still routes to async', () => {
+  const contents = 'useEffect(() => { fetch(url).then(setData) }, [])\n'
+  const domains = routeFile('src/Widget.tsx', contents, TRIGGERS)
+  assert.ok(domains.includes('async'), 'reinvention rules fire on code that avoided the library')
+})
+
+test('every calibration fixture routes to the domains owning its expected rules', () => {
+  const FIXTURES = path.join(__dirname, '..', 'fixtures')
+  const expected = JSON.parse(fs.readFileSync(path.join(FIXTURES, 'expected.json'), 'utf8'))
+  const domainOf = {}
+  for (const block of RULES.split(/^### /m).slice(1)) {
+    domainOf[block.slice(0, block.indexOf(' '))] = (block.match(/^- domain: (.+)$/m) || [])[1]
+  }
+
+  const missed = []
+  for (const [file, ids] of Object.entries(expected.violations)) {
+    const contents = fs.readFileSync(path.join(FIXTURES, 'violations', file), 'utf8')
+    const routed = routeFile(file, contents, TRIGGERS)
+    for (const id of ids) {
+      if (!routed.includes(domainOf[id])) missed.push(`${file} misses ${domainOf[id]} for ${id}`)
+    }
+  }
+  assert.deepEqual(missed, [], `routing drops known violations: ${missed.join(' | ')}`)
 })
