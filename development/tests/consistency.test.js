@@ -308,7 +308,7 @@ test('every auditor opens with a closed output contract', () => {
 test('the command routes through the same code as the gate', () => {
   const command = fs.readFileSync(path.join(ROOT, 'commands', 'reatom-audit.md'), 'utf8')
   assert.ok(command.includes('hooks/route.js'), 'the command calls the shared router')
-  assert.ok(command.includes('--no-cache'), 'the command disables incrementality')
+  assert.ok(command.includes('audits everything you point it at'), 'the command explains it is not incremental')
   assert.ok(
     !/Dispatch these five/.test(command),
     'the command no longer hard-codes a five-way fan-out'
@@ -317,7 +317,7 @@ test('the command routes through the same code as the gate', () => {
 
 test('route.js prints per-auditor orders for a real file', () => {
   const target = path.join('development', 'fixtures', 'violations', 'polling-timer.ts')
-  const out = spawnSync('node', [path.join(ROOT, 'hooks', 'route.js'), '--no-cache', target], {
+  const out = spawnSync('node', [path.join(ROOT, 'hooks', 'route.js'), target], {
     cwd: ROOT,
     encoding: 'utf8'
   })

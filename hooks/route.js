@@ -5,7 +5,7 @@ const { auditableFiles, gateDecision, buildTriggers, planAudit } = require('./ga
 const REFERENCES = path.join(__dirname, '..', 'skills', 'reatom', 'references')
 
 function main() {
-  const args = process.argv.slice(2).filter((a) => a !== '--no-cache')
+  const args = process.argv.slice(2)
   const files = auditableFiles(args)
   if (files.length === 0) {
     process.stdout.write('No auditable TypeScript in the given paths.\n')
