@@ -5,6 +5,7 @@
   "description": "Development scripts and tests for the reatom Claude Code plugin",
   "scripts": {
     "test": "node --test \"development/tests/**/*.test.js\"",
-    "sync-upstream": "node development/sync-upstream.js"
+    "sync-upstream": "node development/sync-upstream.js",
+    "build-slices": "node development/build-rule-slices.js"
   }
 }

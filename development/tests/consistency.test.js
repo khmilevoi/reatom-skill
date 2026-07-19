@@ -2,6 +2,7 @@ const { test } = require('node:test')
 const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
+const { sliceRegistry, sliceFileName, DOMAINS: SLICE_DOMAINS } = require('../rule-slices')
 
 const ROOT = path.join(__dirname, '..', '..')
 const SKILL_DIR = path.join(ROOT, 'skills', 'reatom')
@@ -252,4 +253,26 @@ test('every rule declares at least one non-empty trigger token', () => {
     if (tokens.length === 0) bad.push(`${id} has an empty trigger list`)
   }
   assert.deepEqual(bad, [], `trigger declarations missing: ${bad.join(' | ')}`)
+})
+
+test('each generated slice is byte-equal to a fresh regeneration', () => {
+  const rules = read('references', 'rules.md')
+  const generated = sliceRegistry(rules)
+  for (const domain of SLICE_DOMAINS) {
+    const onDisk = read('references', sliceFileName(domain))
+    assert.equal(onDisk, generated[domain], `${sliceFileName(domain)} is stale — run npm run build-slices`)
+  }
+})
+
+test('every domain has a non-empty slice carrying its own rules only', () => {
+  const rules = read('references', 'rules.md')
+  const generated = sliceRegistry(rules)
+  for (const domain of SLICE_DOMAINS) {
+    const ids = ruleIds(generated[domain])
+    assert.ok(ids.length > 0, `${domain} slice has no rules`)
+    for (const id of ids) {
+      const block = rules.split(/^### /m).slice(1).find((b) => b.startsWith(id))
+      assert.match(block, new RegExp(`^- domain: ${domain}$`, 'm'), `${id} is in the wrong slice`)
+    }
+  }
 })
