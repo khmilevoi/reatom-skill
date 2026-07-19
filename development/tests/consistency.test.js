@@ -239,3 +239,17 @@ test('every relative link under skills/ resolves to a real file', () => {
   }
   assert.deepEqual(broken, [], `broken relative links: ${broken.join(' | ')}`)
 })
+
+test('every rule declares at least one non-empty trigger token', () => {
+  const rules = read('references', 'rules.md')
+  const blocks = rules.split(/^### /m).slice(1)
+  const bad = []
+  for (const block of blocks) {
+    const id = block.slice(0, block.indexOf(' '))
+    const line = (block.match(/^- trigger: (.+)$/m) || [])[1]
+    if (!line) { bad.push(`${id} has no trigger`); continue }
+    const tokens = line.split(',').map((t) => t.trim()).filter(Boolean)
+    if (tokens.length === 0) bad.push(`${id} has an empty trigger list`)
+  }
+  assert.deepEqual(bad, [], `trigger declarations missing: ${bad.join(' | ')}`)
+})
