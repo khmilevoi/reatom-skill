@@ -70,7 +70,7 @@ prefer those when the example's prose and the handbook disagree.
 - URL filters and preferences: use `withSearchParams` and persistence extensions. (RTM-R02, RTM-R03)
 - Forms: use `reatomField`, `reatomFieldSet`, and `reatomForm`. (RTM-R04)
 - React reads: read atoms lazily, after early-return guards. (RTM-C01)
-- React orchestration: collapse hook coordination into one `computed(async)`. (RTM-C02)
+- Orchestration: collapse coordinated async into one `computed(async)`. (RTM-S06)
 - Naming: name every atom, computed, action, and route. (RTM-S05)
 
 ## Quick Reference

@@ -8,25 +8,14 @@ tools: Read, Grep, Glob
 Audit the changed TypeScript listed in your prompt for violations of the
 **react** domain rules in `${CLAUDE_PLUGIN_ROOT}/skills/reatom/references/rules.md`.
 
-Read the registry first. Your rules are those with `domain: react`
-(RTM-C01, RTM-C02). Ignore every other domain — other auditors own them.
-
-You are the React-facing auditor, and the only one tied to an adapter. RTM-C01 is
-strictly about `@reatom/react` — `reatomComponent`, hooks, `bindField`. RTM-C02 is
-about React-shaped orchestration recreated in Reatom, so its evidence usually sits
-in plain model code with **no React import at all**: the hook is gone, its habits
-remain. Audit those files too.
+Read the registry first. Your rule is `domain: react` (RTM-C01) — lazy atom reads
+in `reatomComponent`. This is the only adapter-bound auditor; a Vue or Solid
+project swaps this brief and keeps the other four unchanged.
 
 Routing, forms and persistence are framework-agnostic core and belong to
 `audit-routing-forms`, even when you meet them inside a `.tsx` file.
 
 ## What you are hunting
-
-**RTM-C02** is the highest-value rule in the whole registry: React hook
-orchestration recreated inside Reatom. Look for a derived boolean gating async
-work (`canLoad`, `enabled`, `shouldFetch`), placeholder params passed to keep a
-hook quiet, or several async units coordinated by duplicated state. One
-`computed(async)` with early returns replaces all of it.
 
 **RTM-C01**: inside `reatomComponent`, atoms must be read after the guards that
 make them unnecessary — `error()` → return, `ready()` → return, then `data()`.
@@ -58,12 +47,12 @@ Include the sibling's `file:line` when you find one.
 For each finding:
 
 ```
-rule_id: RTM-C02
-file: src/features/balance/model.ts
+rule_id: RTM-C01
+file: src/features/balance/view.tsx
 line: 12
-found: canLoadAtom gates two async units, mirroring React enabled flags
-instead: one computed(async, 'balanceWarning') with early returns, extended with withAsyncData({ initState: null })
-sibling: src/features/limits/model.ts:7 uses a single computed(async) with early returns
+found: data(), ready() and error() are all read before the guards that make most of them unnecessary
+instead: read error() first and return, then ready() and return, then data() last
+sibling: src/features/limits/view.tsx:9 reads data() only after the ready() guard
 ```
 
 If nothing violates your rules, reply exactly `audit-react: no findings`.

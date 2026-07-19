@@ -168,15 +168,6 @@ two drift.
 - exception: values every branch needs
 - ref: react-guide.md#React-to-Reatom decision guide
 
-### RTM-C02 — Collapse hook orchestration into one computed
-- domain: react
-- kind: reinvention
-- bad: `canLoadAtom` gating several async units, mirroring React `enabled` flags
-- good: one `computed(async)` with early returns, extended with `withAsyncData`
-- detect: enabled-flag objects, placeholder params, or duplicated state coordinating async timing
-- exception: genuinely independent flows with separate lifetimes
-- ref: react-guide.md#Before/after: enabled flags and async queries
-
 ### RTM-S05 — Name every unit
 - domain: state
 - kind: hygiene
@@ -185,3 +176,12 @@ two drift.
 - detect: any `atom`/`computed`/`action`/`reatomRoute` created without a name argument
 - exception: none
 - ref: upstream/review.md#Atom Factory Named Like A Getter
+
+### RTM-S06 — Collapse hook orchestration into one computed
+- domain: state
+- kind: reinvention
+- bad: `canLoadAtom` gating several async units, mirroring React `enabled` flags
+- good: one `computed(async)` with early returns, extended with `withAsyncData`
+- detect: enabled-flag objects, placeholder params, or duplicated state coordinating async timing
+- exception: genuinely independent flows with separate lifetimes
+- ref: react-guide.md#Before/after: enabled flags and async queries

@@ -9,7 +9,7 @@ Audit the changed TypeScript listed in your prompt for violations of the
 **state** domain rules in `${CLAUDE_PLUGIN_ROOT}/skills/reatom/references/rules.md`.
 
 Read the registry first. Your rules are those with `domain: state`
-(RTM-S01 … RTM-S05). Ignore every other domain — other auditors own them.
+(RTM-S01 … RTM-S06). Ignore every other domain — other auditors own them.
 
 ## What you are hunting
 
@@ -26,6 +26,12 @@ one (RTM-S04). Over-correcting is itself a finding against you.
 
 RTM-S05 (naming) applies to every atom, computed and action you see, whatever
 domain it serves.
+
+A third shape, `reinvention`: async work coordinated by hand — enabled-flag atoms,
+placeholder params, or duplicated state timing several requests — where one
+`computed(async)` with early returns would own the whole flow (RTM-S06). This
+fires on framework-agnostic core code; do not skip it because a file has no React
+in it.
 
 ## Calibration
 

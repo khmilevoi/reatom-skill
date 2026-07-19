@@ -73,6 +73,21 @@ test('every rule has a unique id, a known domain and a known kind', () => {
   }
 })
 
+const PREFIX_DOMAIN = { A: 'async', S: 'state', L: 'lifecycle', R: 'routing-forms', C: 'react' }
+
+test('every rule id prefix agrees with its declared domain', () => {
+  const rules = read('references', 'rules.md')
+  const blocks = rules.split(/^### /m).slice(1)
+  const wrong = []
+  for (const block of blocks) {
+    const id = block.slice(0, block.indexOf(' '))
+    const domain = (block.match(/^- domain: (.+)$/m) || [])[1]
+    const letter = id.slice(4, 5)
+    if (PREFIX_DOMAIN[letter] !== domain) wrong.push(`${id} is domain "${domain}"`)
+  }
+  assert.deepEqual(wrong, [], `id prefixes disagree with domains: ${wrong.join(' | ')}`)
+})
+
 test('every registry rule is owned by exactly one auditor domain', () => {
   const rules = read('references', 'rules.md')
   const owned = new Set(Object.values(AUDITORS))
