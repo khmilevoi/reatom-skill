@@ -1,6 +1,6 @@
 ---
 name: audit-state
-description: Audits changed TypeScript for Reatom state-domain rule violations — identity setters, atomization, dependent writable state, naming. Read-only; reports findings, never edits.
+description: Audits changed TypeScript for Reatom state-domain rule violations — identity setters, atomization, dependent writable state, async orchestration, naming. Read-only; reports findings, never edits.
 model: sonnet
 tools: Read, Grep, Glob
 ---
@@ -13,7 +13,7 @@ Read the registry first. Your rules are those with `domain: state`
 
 ## What you are hunting
 
-Two shapes. `reinvention`: state derivation done by hand that `withComputed` or
+Three shapes. `reinvention`: state derivation done by hand that `withComputed` or
 atomization would own. `anti-pattern`: identity setter actions, parallel UI-state
 maps mirroring a loaded collection, model transitions authored in the view.
 

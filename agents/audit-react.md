@@ -1,6 +1,6 @@
 ---
 name: audit-react
-description: Audits changed TypeScript for Reatom React-adapter rule violations — lazy atom reads and hook orchestration collapsed into computeds. Read-only; reports findings, never edits.
+description: Audits changed TypeScript for Reatom React-adapter rule violations — lazy atom reads in reatomComponent. Read-only; reports findings, never edits.
 model: sonnet
 tools: Read, Grep, Glob
 ---
