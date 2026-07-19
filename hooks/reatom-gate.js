@@ -1,9 +1,7 @@
 const fs = require('node:fs')
 const path = require('node:path')
 const { spawnSync } = require('node:child_process')
-const { computeMarker, auditableFiles, gateDecision } = require('./gate-logic')
-
-const MARKER_FILE = 'reatom-audit-last'
+const { auditableFiles, gateDecision, parseCache, planAudit, buildTriggers } = require('./gate-logic')
 
 function readStdin() {
   try {
@@ -21,11 +19,6 @@ function git(cwd, args) {
 
 function isGitRepo(cwd) {
   return git(cwd, ['rev-parse', '--git-dir']) !== null
-}
-
-function headSha(cwd) {
-  const out = git(cwd, ['rev-parse', 'HEAD'])
-  return out ? out.trim() : 'NO_HEAD'
 }
 
 function isReatomProject(cwd) {
@@ -57,25 +50,28 @@ function changedFiles(cwd) {
   return [...new Set(all)]
 }
 
-function markerPath(cwd) {
+const REFERENCES = path.join(__dirname, '..', 'skills', 'reatom', 'references')
+const CACHE_FILE = 'reatom-audit-last'
+
+function cachePath(cwd) {
   const gitDir = git(cwd, ['rev-parse', '--git-dir'])
   const resolved = gitDir ? gitDir.trim() : '.git'
-  return path.resolve(cwd, resolved, MARKER_FILE)
+  return path.resolve(cwd, resolved, CACHE_FILE)
 }
 
-function readMarker(cwd) {
+function readCache(cwd) {
   try {
-    return fs.readFileSync(markerPath(cwd), 'utf8').trim()
+    return parseCache(fs.readFileSync(cachePath(cwd), 'utf8'))
   } catch {
-    return null
+    return {}
   }
 }
 
-function writeMarker(cwd, marker) {
+function writeCache(cwd, cache) {
   try {
-    fs.writeFileSync(markerPath(cwd), marker + '\n')
+    fs.writeFileSync(cachePath(cwd), JSON.stringify(cache) + '\n')
   } catch {
-    // fail-open: the marker is only an optimization
+    // fail-open: the cache is only an optimization
   }
 }
 
@@ -88,24 +84,31 @@ function main() {
     isGitRepo: false,
     isReatomProject: false,
     auditableFiles: [],
-    marker: null,
-    lastMarker: null
+    plan: null
   }
 
   if (!ctx.stopHookActive) {
     ctx.isGitRepo = isGitRepo(cwd)
     if (ctx.isGitRepo) {
-      ctx.lastMarker = readMarker(cwd)
       ctx.isReatomProject = isReatomProject(cwd)
       if (ctx.isReatomProject) {
         ctx.auditableFiles = auditableFiles(changedFiles(cwd))
-        ctx.marker = computeMarker(ctx.auditableFiles, headSha(cwd))
+        if (ctx.auditableFiles.length > 0) {
+          const rules = fs.readFileSync(path.join(REFERENCES, 'rules.md'), 'utf8')
+          ctx.plan = planAudit({
+            files: ctx.auditableFiles,
+            readFile: (f) => fs.readFileSync(path.join(cwd, f), 'utf8'),
+            readSlice: (d) => fs.readFileSync(path.join(REFERENCES, `rules-${d}.md`), 'utf8'),
+            cache: readCache(cwd),
+            triggers: buildTriggers(rules)
+          })
+        }
       }
     }
   }
 
   const decision = gateDecision(ctx)
-  if (decision.writeMarker && ctx.marker) writeMarker(cwd, ctx.marker)
+  if (decision.writeCache && decision.cache) writeCache(cwd, decision.cache)
   if (decision.block) {
     process.stdout.write(JSON.stringify({ decision: 'block', reason: decision.reason }) + '\n')
   }

@@ -4,7 +4,7 @@ const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
 const { spawnSync } = require('node:child_process')
-const { computeMarker, auditableFiles, gateDecision, DOMAINS } = require('../../hooks/gate-logic')
+const { auditableFiles, gateDecision, DOMAINS } = require('../../hooks/gate-logic')
 
 const GATE = path.join(__dirname, '..', '..', 'hooks', 'reatom-gate.js')
 
@@ -13,14 +13,13 @@ const base = {
   isGitRepo: true,
   isReatomProject: true,
   auditableFiles: ['src/model.ts'],
-  marker: 'M1',
-  lastMarker: null
+  plan: {
+    assignments: { state: ['src/model.ts'], async: ['src/model.ts'] },
+    notDispatched: ['lifecycle', 'routing-forms', 'react'],
+    skipped: 7,
+    nextCache: { 'src/model.ts\u0000state': 'h' }
+  }
 }
-
-test('computeMarker is deterministic and order-independent', () => {
-  assert.equal(computeMarker(['b', 'a'], 'sha'), computeMarker(['a', 'b'], 'sha'))
-  assert.notEqual(computeMarker(['a', 'b'], 'sha'), computeMarker(['a', 'b'], 'other'))
-})
 
 test('auditableFiles keeps ts/tsx and drops everything else', () => {
   assert.deepEqual(
@@ -37,38 +36,32 @@ test('auditableFiles keeps ts/tsx and drops everything else', () => {
   )
 })
 
-test('gateDecision blocks only when every condition holds', () => {
+test('gateDecision blocks only when there is work to dispatch', () => {
   assert.equal(gateDecision(base).block, true)
   assert.equal(gateDecision({ ...base, stopHookActive: true }).block, false)
   assert.equal(gateDecision({ ...base, isGitRepo: false }).block, false)
   assert.equal(gateDecision({ ...base, isReatomProject: false }).block, false)
   assert.equal(gateDecision({ ...base, auditableFiles: [] }).block, false)
-  assert.equal(gateDecision({ ...base, lastMarker: 'M1' }).block, false)
+  assert.equal(
+    gateDecision({ ...base, plan: { ...base.plan, assignments: {} } }).block,
+    false,
+    'everything already audited'
+  )
 })
 
-test('allow paths do not write a marker they never computed', () => {
-  assert.equal(gateDecision({ ...base, stopHookActive: true }).writeMarker, false)
-  assert.equal(gateDecision({ ...base, isReatomProject: false }).writeMarker, false)
+test('a fully cached run still records the pruned cache', () => {
+  const decision = gateDecision({ ...base, plan: { ...base.plan, assignments: {} } })
+  assert.equal(decision.writeCache, true, 'pruning must survive an allow')
 })
 
-test('a blocking decision records the marker', () => {
-  assert.equal(gateDecision(base).writeMarker, true)
-})
-
-test('the block reason names all five auditors, the registry, and the files', () => {
+test('the block reason lists files under each dispatched auditor only', () => {
   const { reason } = gateDecision(base)
-  for (const agent of ['audit-async', 'audit-state', 'audit-lifecycle', 'audit-routing-forms', 'audit-react']) {
-    assert.ok(reason.includes(agent), `reason names ${agent}`)
-  }
-  assert.match(reason, /rules\.md/)
-  assert.match(reason, /src\/model\.ts/)
+  assert.match(reason, /audit-state \(references\/rules-state\.md\)/)
+  assert.match(reason, /audit-async \(references\/rules-async\.md\)/)
+  assert.ok(!/^audit-react/m.test(reason), 'a domain with no work is not dispatched')
+  assert.match(reason, /Not dispatched — no matching code: audit-lifecycle, audit-routing-forms, audit-react/)
+  assert.match(reason, /Skipped — unchanged since last audit: 7 pairs/)
   assert.match(reason, /dismiss/i)
-})
-
-test('the block reason truncates very long file lists', () => {
-  const many = Array.from({ length: 50 }, (_, i) => `src/f${i}.ts`)
-  const { reason } = gateDecision({ ...base, auditableFiles: many })
-  assert.match(reason, /and 10 more/)
 })
 
 function makeRepo({ reatom = true, changed = 'src/model.ts' } = {}) {
@@ -93,7 +86,7 @@ function makeRepo({ reatom = true, changed = 'src/model.ts' } = {}) {
   if (changed) {
     const full = path.join(dir, changed)
     fs.mkdirSync(path.dirname(full), { recursive: true })
-    fs.writeFileSync(full, 'export const x = 1\n')
+    fs.writeFileSync(full, 'export const x = setInterval(() => {}, 1000)\n')
   }
   return dir
 }
@@ -128,16 +121,37 @@ test('integration: stop_hook_active allows silently', () => {
   assert.equal(runGate(dir, true).stdout.trim(), '')
 })
 
-test('integration: an unchanged second run allows via the marker', () => {
+test('integration: an unchanged second run allows via the cache', () => {
   const dir = makeRepo()
   assert.equal(JSON.parse(runGate(dir).stdout.trim()).decision, 'block')
   assert.equal(runGate(dir).stdout.trim(), '', 'same state must not re-audit')
 })
 
+test('integration: editing contents without moving HEAD re-blocks', () => {
+  const dir = makeRepo()
+  assert.equal(JSON.parse(runGate(dir).stdout.trim()).decision, 'block')
+  fs.writeFileSync(path.join(dir, 'src', 'model.ts'), 'export const x = atom(2, "x")\n')
+  const out = JSON.parse(runGate(dir).stdout.trim())
+  assert.equal(out.decision, 'block', 'a content edit must not pass unaudited')
+})
+
+test('integration: a docs-only commit does not re-audit unchanged TypeScript', () => {
+  const dir = makeRepo()
+  const git = (args) => spawnSync('git', args, { cwd: dir, encoding: 'utf8' })
+  assert.equal(JSON.parse(runGate(dir).stdout.trim()).decision, 'block')
+  fs.writeFileSync(path.join(dir, 'notes.md'), '# notes\n')
+  // Stage only the markdown. `git add .` would also commit src/model.ts, which
+  // drops it out of scope entirely and would make this test pass for the wrong
+  // reason — the file must stay in scope and be skipped by the cache.
+  git(['add', 'notes.md'])
+  git(['commit', '-q', '-m', 'docs'])
+  assert.equal(runGate(dir).stdout.trim(), '', 'HEAD moved but no TypeScript changed')
+})
+
 test('integration: a further TypeScript change re-blocks', () => {
   const dir = makeRepo()
   runGate(dir)
-  fs.writeFileSync(path.join(dir, 'src', 'other.tsx'), 'export const y = 2\n')
+  fs.writeFileSync(path.join(dir, 'src', 'other.tsx'), 'export const y = setInterval(() => {}, 1000)\n')
   assert.equal(JSON.parse(runGate(dir).stdout.trim()).decision, 'block')
 })
 
@@ -146,7 +160,7 @@ test('integration: committed work on a branch is still audited', () => {
   const git = (args) => spawnSync('git', args, { cwd: dir, encoding: 'utf8' })
   git(['checkout', '-q', '-b', 'feature'])
   fs.mkdirSync(path.join(dir, 'src'), { recursive: true })
-  fs.writeFileSync(path.join(dir, 'src', 'committed.ts'), 'export const z = 3\n')
+  fs.writeFileSync(path.join(dir, 'src', 'committed.ts'), 'export const z = setInterval(() => {}, 1000)\n')
   git(['add', '.'])
   git(['commit', '-q', '-m', 'feature work'])
   const out = JSON.parse(runGate(dir).stdout.trim())

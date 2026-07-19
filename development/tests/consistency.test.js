@@ -118,14 +118,18 @@ test('every auditor is read-only, named, and points at the registry', () => {
 })
 
 test('the gate dispatches exactly the auditors that exist', () => {
-  const { gateDecision } = require(path.join(ROOT, 'hooks', 'gate-logic'))
+  const { gateDecision, DOMAINS } = require(path.join(ROOT, 'hooks', 'gate-logic'))
   const decision = gateDecision({
     stopHookActive: false,
     isGitRepo: true,
     isReatomProject: true,
     auditableFiles: ['src/model.ts'],
-    marker: 'M1',
-    lastMarker: null
+    plan: {
+      assignments: Object.fromEntries(DOMAINS.map((d) => [d, ['src/model.ts']])),
+      notDispatched: [],
+      skipped: 0,
+      nextCache: {}
+    }
   })
   assert.equal(decision.block, true)
   for (const name of Object.keys(AUDITORS)) {
