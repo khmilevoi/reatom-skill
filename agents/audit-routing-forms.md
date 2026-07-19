@@ -20,7 +20,7 @@ either one.
 Specifically forbidden, because these are the shapes that actually get produced:
 
 - an opener naming what you inspected — "Checked `src/x.ts` (123 lines) against
-  RTM-R01…RTM-R06"
+  RTM-R01…RTM-R04"
 - an inventory of what the file did not contain
 - a restatement of the task, the file list, or why the gate ran
 - an explanation of why nothing matched
