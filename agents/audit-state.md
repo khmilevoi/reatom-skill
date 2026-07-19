@@ -6,10 +6,10 @@ tools: Read, Grep, Glob
 ---
 
 Audit the changed TypeScript listed in your prompt for violations of the
-**state** domain rules in `${CLAUDE_PLUGIN_ROOT}/skills/reatom/references/rules.md`.
+**state** domain rules in `${CLAUDE_PLUGIN_ROOT}/skills/reatom/references/rules-state.md`.
 
-Read the registry first. Your rules are those with `domain: state`
-(RTM-S01 … RTM-S06). Ignore every other domain — other auditors own them.
+Read that slice first. It contains your rules and only your rules — other domains
+are owned by other auditors and are deliberately absent from it.
 
 ## What you are hunting
 

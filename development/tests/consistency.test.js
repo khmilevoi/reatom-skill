@@ -105,7 +105,14 @@ test('every auditor is read-only, named, and points at the registry', () => {
     const brief = fs.readFileSync(path.join(ROOT, 'agents', `${name}.md`), 'utf8')
     assert.match(brief, new RegExp(`^name: ${name}$`, 'm'), `${name} declares its name`)
     assert.match(brief, /^tools: Read, Grep, Glob$/m, `${name} is read-only`)
-    assert.ok(brief.includes('references/rules.md'), `${name} points at the registry`)
+    assert.ok(
+      brief.includes(`references/rules-${domain}.md`),
+      `${name} points at its own slice`
+    )
+    assert.ok(
+      !brief.includes('references/rules.md'),
+      `${name} does not also pull the whole registry`
+    )
     assert.ok(brief.includes(domain), `${name} names its domain`)
   }
 })

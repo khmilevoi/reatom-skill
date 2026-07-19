@@ -6,10 +6,10 @@ tools: Read, Grep, Glob
 ---
 
 Audit the changed TypeScript listed in your prompt for violations of the
-**react** domain rules in `${CLAUDE_PLUGIN_ROOT}/skills/reatom/references/rules.md`.
+**react** domain rules in `${CLAUDE_PLUGIN_ROOT}/skills/reatom/references/rules-react.md`.
 
-Read the registry first. Your rule is `domain: react` (RTM-C01) — lazy atom reads
-in `reatomComponent`. This is the only adapter-bound auditor; a Vue or Solid
+Read that slice first. It contains your rules and only your rules — other domains
+are owned by other auditors and are deliberately absent from it. This is the only adapter-bound auditor; a Vue or Solid
 project swaps this brief and keeps the other four unchanged.
 
 Routing, forms and persistence are framework-agnostic core and belong to
