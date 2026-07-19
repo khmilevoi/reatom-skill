@@ -1,13 +1,14 @@
 ---
-description: Audit Reatom code against the rule registry with five parallel read-only domain auditors
+description: Audit Reatom code against the rule registry by dispatching exactly the read-only domain auditors the router names for the given paths
 ---
 
 Audit Reatom code in this repository against `${CLAUDE_PLUGIN_ROOT}/skills/reatom/references/rules.md`.
 
 ## Scope
 
-Use `$ARGUMENTS` when given — a path, a glob, or a directory. With no arguments,
-audit the same set the Stop gate would: changed TypeScript across
+Use `$ARGUMENTS` when given — one or more literal `.ts`/`.tsx` file paths. The router
+does not expand globs or directories; anything else in the list is silently dropped.
+With no arguments, audit the same set the Stop gate would: changed TypeScript across
 `merge-base(HEAD, main)..HEAD` plus the working tree.
 
 Unlike the gate, you may be pointed at code that has not changed. That is the

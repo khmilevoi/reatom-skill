@@ -16,6 +16,7 @@ const base = {
   plan: {
     assignments: { state: ['src/model.ts'], async: ['src/model.ts'] },
     notDispatched: ['lifecycle', 'routing-forms', 'react'],
+    fullyCached: [],
     skipped: 7,
     nextCache: { 'src/model.ts\u0000state': 'h' }
   }
@@ -64,9 +65,52 @@ test('the block reason lists files under each dispatched auditor only', () => {
   assert.match(reason, /dismiss/i)
 })
 
+test('the block reason names fully cached domains on their own line, not as "no matching code"', () => {
+  const ctx = {
+    ...base,
+    plan: {
+      assignments: { async: ['src/model.ts'] },
+      notDispatched: ['react'],
+      fullyCached: ['state', 'lifecycle', 'routing-forms'],
+      skipped: 7,
+      nextCache: {}
+    }
+  }
+  const { reason } = gateDecision(ctx)
+  assert.match(
+    reason,
+    /Fully cached — routed but already audited: audit-state, audit-lifecycle, audit-routing-forms/
+  )
+  assert.match(reason, /Not dispatched — no matching code: audit-react/)
+  assert.ok(
+    !/no matching code: audit-react, audit-state/.test(reason),
+    'a fully cached domain must not be folded into the not-dispatched line'
+  )
+})
+
+test('the block reason omits the fully-cached line when there is nothing to name', () => {
+  const { reason } = gateDecision(base)
+  assert.ok(!reason.includes('Fully cached'), 'base plan has no fully cached domains')
+})
+
+test('the block reason uses the singular for exactly one skipped pair', () => {
+  const ctx = { ...base, plan: { ...base.plan, skipped: 1 } }
+  const { reason } = gateDecision(ctx)
+  assert.match(reason, /Skipped — unchanged since last audit: 1 pair$/m)
+})
+
 test('the block reason truncates a long file list within one auditor', () => {
   const many = Array.from({ length: 45 }, (_, i) => `src/f${i}.ts`)
-  const ctx = { ...base, plan: { ...base.plan, assignments: { state: many } } }
+  const ctx = {
+    ...base,
+    plan: {
+      assignments: { state: many },
+      notDispatched: ['lifecycle', 'routing-forms', 'react'],
+      fullyCached: ['async'],
+      skipped: 7,
+      nextCache: {}
+    }
+  }
   const { reason } = gateDecision(ctx)
   assert.match(reason, /audit-state \(references\/rules-state\.md\)/)
   assert.match(reason, /src\/f39\.ts/, 'the last file within the cap is listed')
@@ -178,6 +222,23 @@ test('integration: committed work on a branch is still audited', () => {
   assert.match(out.reason, /committed\.ts/)
 })
 
+test('integration: a deleted TypeScript file is not dispatched to any auditor', () => {
+  const dir = makeRepo({ changed: null })
+  const git = (args) => spawnSync('git', args, { cwd: dir, encoding: 'utf8' })
+  fs.mkdirSync(path.join(dir, 'src'), { recursive: true })
+  fs.writeFileSync(path.join(dir, 'src', 'gone.ts'), 'export const x = setInterval(() => {}, 1000)\n')
+  git(['add', '.'])
+  git(['commit', '-q', '-m', 'add gone.ts'])
+  fs.rmSync(path.join(dir, 'src', 'gone.ts'))
+  // A surviving change proves the gate still runs and still blocks — the
+  // assertion is that the deleted path specifically never reaches an auditor,
+  // not that the gate goes quiet altogether.
+  fs.writeFileSync(path.join(dir, 'src', 'model.ts'), 'export const y = setInterval(() => {}, 1000)\n')
+  const out = JSON.parse(runGate(dir).stdout.trim())
+  assert.equal(out.decision, 'block', 'the surviving file still needs an audit')
+  assert.ok(!out.reason.includes('gone.ts'), 'a deleted file must not fan out to every auditor')
+})
+
 test('integration: a non-git directory allows silently', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'reatom-nogit-'))
   fs.writeFileSync(path.join(dir, 'package.json'), '{"dependencies":{"@reatom/core":"1001.0.0"}}')
@@ -284,6 +345,22 @@ function plan(files, contents, cache = {}) {
   return planAudit({ files, readFile: (f) => contents[f], readSlice, cache, triggers: TRIGGERS })
 }
 
+test('pairKey separates file and domain with a real NUL, not a space or colon', () => {
+  const NUL = String.fromCharCode(0)
+  const key = pairKey('a', 'b')
+  assert.equal(key.charCodeAt(1), 0, 'the separator byte is NUL')
+  assert.equal(key, 'a' + NUL + 'b')
+  // A path containing a literal space or colon must not collide with a
+  // differently-split pair — that would read as "already audited".
+  assert.notEqual(pairKey('a b', 'c'), pairKey('a', 'b c'))
+})
+
+test('pairHash changes when file contents or slice contents change', () => {
+  const base = pairHash('file contents', 'slice contents')
+  assert.notEqual(pairHash('other contents', 'slice contents'), base)
+  assert.notEqual(pairHash('file contents', 'other slice'), base)
+})
+
 test('parseCache treats anything that is not a plain object as empty', () => {
   assert.deepEqual(parseCache('{"a":"b"}'), { a: 'b' })
   assert.deepEqual(parseCache('9d8c7b6a'), {}, 'legacy hex marker')
@@ -299,6 +376,34 @@ test('planAudit assigns a file only to the domains that can fire on it', () => {
   assert.ok(assignments.lifecycle.includes('src/poll.ts'))
   assert.ok(notDispatched.includes('routing-forms'), 'a domain with no work is not dispatched')
   assert.ok(!('routing-forms' in assignments), 'empty domains are absent, not empty arrays')
+})
+
+test('a domain that is fully cached is distinguished from a domain never routed to', () => {
+  const contents = { 'src/poll.ts': fs.readFileSync(
+    path.join(__dirname, '..', 'fixtures', 'violations', 'polling-timer.ts'), 'utf8') }
+  const first = plan(['src/poll.ts'], contents)
+  assert.ok(first.assignments.lifecycle.includes('src/poll.ts'))
+  assert.ok(first.notDispatched.includes('routing-forms'), 'never routed to this file')
+  assert.deepEqual(first.fullyCached, [], 'nothing is cached on the first run')
+
+  const second = plan(['src/poll.ts'], contents, first.nextCache)
+  assert.deepEqual(second.assignments, {}, 'nothing new to audit')
+  assert.ok(
+    second.fullyCached.includes('lifecycle'),
+    'lifecycle had files routed to it, all of which were already audited'
+  )
+  assert.ok(
+    !second.notDispatched.includes('lifecycle'),
+    'a fully cached domain must not be reported as having no matching code'
+  )
+  assert.ok(
+    second.notDispatched.includes('routing-forms'),
+    'routing-forms was never routed to this file and stays not-dispatched'
+  )
+  assert.ok(
+    !second.fullyCached.includes('routing-forms'),
+    'a domain never routed to is not "fully cached" either'
+  )
 })
 
 test('an unchanged pair is skipped on the second plan', () => {

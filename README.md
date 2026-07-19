@@ -18,10 +18,15 @@ vendored docs and your installed `@reatom/core` disagree, your installed types w
 are what your code runs against.
 
 **The audit.** A Stop hook that fires when a session changed TypeScript in a project with
-`@reatom/*` in its `package.json`. It dispatches five read-only auditors in parallel, one
-per domain — async, state, lifecycle, routing/forms, React — each reporting only
-violations it can pin to a rule id, a `file:line`, and a named replacement API. Every
+`@reatom/*` in its `package.json`. It routes each changed file to the domains whose rules
+can fire on it — async, state, lifecycle, routing/forms, React — and dispatches read-only
+auditors, in parallel, only for the domains that still have unaudited work, each reporting
+only violations it can pin to a rule id, a `file:line`, and a named replacement API. Every
 finding is then fixed or dismissed with a written rationale.
+
+The gate is incremental: it caches which file/domain pairs it has already audited against
+which rule slice, and skips a pair once its cache entry matches. A Stop can pass with no
+auditor dispatched at all when everything routed has already been audited.
 
 Non-Reatom projects and sessions with no TypeScript change exit silently.
 

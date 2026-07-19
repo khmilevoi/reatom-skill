@@ -98,9 +98,11 @@ prefer those when the example's prose and the handbook disagree.
 ## Reference Map
 
 - `references/rules.md`
-  - The rule registry: one entry per rule with id, domain, kind, bad/good examples,
-    detection criteria, and exceptions. Cited by the audit agents. This file is the
-    source of truth for the Default Decisions above.
+  - The rule registry: one entry per rule with id, domain, kind, trigger tokens,
+    bad/good examples, detection criteria, and exceptions. The audit agents cite
+    their own generated per-domain slice (`references/rules-<domain>.md`), not this
+    file directly. This file is the source of truth for the Default Decisions above
+    and for the slices themselves.
 - `references/react-guide.md`
   - `React-to-Reatom decision guide`
   - `Before/after: enabled flags and async queries`

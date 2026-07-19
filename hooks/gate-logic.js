@@ -62,8 +62,10 @@ function buildReason(plan, dispatched) {
 
   const idle = plan.notDispatched.map((d) => AUDITOR_OF[d])
   if (idle.length > 0) lines.push(`Not dispatched — no matching code: ${idle.join(', ')}`)
+  const cached = plan.fullyCached.map((d) => AUDITOR_OF[d])
+  if (cached.length > 0) lines.push(`Fully cached — routed but already audited: ${cached.join(', ')}`)
   if (plan.skipped > 0) {
-    lines.push(`Skipped — unchanged since last audit: ${plan.skipped} pairs`)
+    lines.push(`Skipped — unchanged since last audit: ${plan.skipped} pair${plan.skipped === 1 ? '' : 's'}`)
   }
 
   lines.push(
@@ -132,6 +134,10 @@ function parseCache(raw) {
 function planAudit({ files, readFile, readSlice, cache, triggers }) {
   const slices = Object.fromEntries(DOMAINS.map((d) => [d, safeRead(() => readSlice(d), '')]))
   const assignments = {}
+  // Tracked separately from `assignments`: a domain can have files routed to it
+  // that are all cache hits, which must not read the same as no file ever
+  // reaching it at all.
+  const routed = new Set()
   const nextCache = {}
   let skipped = 0
 
@@ -146,6 +152,7 @@ function planAudit({ files, readFile, readSlice, cache, triggers }) {
     const domains = contents === null ? [...DOMAINS] : routeFile(file, contents, triggers)
 
     for (const domain of domains) {
+      routed.add(domain)
       const key = pairKey(file, domain)
       const hash = pairHash(contents === null ? '' : contents, slices[domain])
       nextCache[key] = hash
@@ -160,7 +167,8 @@ function planAudit({ files, readFile, readSlice, cache, triggers }) {
 
   return {
     assignments,
-    notDispatched: DOMAINS.filter((d) => !assignments[d]),
+    notDispatched: DOMAINS.filter((d) => !routed.has(d)),
+    fullyCached: DOMAINS.filter((d) => routed.has(d) && !assignments[d]),
     skipped,
     nextCache
   }

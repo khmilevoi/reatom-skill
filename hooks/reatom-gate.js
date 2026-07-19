@@ -39,8 +39,8 @@ function isReatomProject(cwd) {
 // uncommitted changes; agents commit mid-session, so that would go blind.
 function changedFiles(cwd) {
   const base = git(cwd, ['merge-base', 'HEAD', 'main'])
-  const committed = base ? git(cwd, ['diff', '--name-only', base.trim(), 'HEAD']) || '' : ''
-  const working = git(cwd, ['diff', '--name-only', 'HEAD']) || ''
+  const committed = base ? git(cwd, ['diff', '--diff-filter=d', '--name-only', base.trim(), 'HEAD']) || '' : ''
+  const working = git(cwd, ['diff', '--diff-filter=d', '--name-only', 'HEAD']) || ''
   const untracked = git(cwd, ['ls-files', '--others', '--exclude-standard']) || ''
   const all = [committed, working, untracked]
     .join('\n')

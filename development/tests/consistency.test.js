@@ -118,6 +118,44 @@ test('every auditor is read-only, named, and points at the registry', () => {
   }
 })
 
+// Stale `description:` frontmatter has been the recurring defect in this
+// plugin: audit-react's description once kept "hook orchestration collapsed
+// into computeds" after RTM-S06 moved to the state domain, auditor briefs
+// cited rule-id ranges their domain did not have, and the reatom-audit
+// command's description drifted from its own body. Nothing caught any of
+// them until now.
+test("an auditor's description does not claim a rule id or domain label it does not own", () => {
+  const rules = read('references', 'rules.md')
+  const blocks = rules.split(/^### /m).slice(1)
+  const domainOfId = {}
+  for (const block of blocks) {
+    const id = block.slice(0, block.indexOf(' '))
+    domainOfId[id] = (block.match(/^- domain: (.+)$/m) || [])[1]
+  }
+
+  for (const [name, domain] of Object.entries(AUDITORS)) {
+    const brief = fs.readFileSync(path.join(ROOT, 'agents', `${name}.md`), 'utf8')
+    const frontmatter = brief.split(/^---$/m)[1]
+    const description = (frontmatter.match(/^description: (.+)$/m) || [])[1] || ''
+
+    for (const id of description.match(/RTM-[ASLRC]\d{2}/g) || []) {
+      assert.equal(
+        domainOfId[id],
+        domain,
+        `${name} description cites ${id}, owned by domain "${domainOfId[id]}", not its own "${domain}"`
+      )
+    }
+
+    for (const other of DOMAINS) {
+      if (other === domain) continue
+      assert.ok(
+        !description.includes(`${other}-domain`),
+        `${name} description names "${other}-domain", which belongs to a different auditor`
+      )
+    }
+  }
+})
+
 test('the gate dispatches exactly the auditors that exist', () => {
   const { gateDecision, DOMAINS } = require(path.join(ROOT, 'hooks', 'gate-logic'))
   const decision = gateDecision({
@@ -128,6 +166,7 @@ test('the gate dispatches exactly the auditors that exist', () => {
     plan: {
       assignments: Object.fromEntries(DOMAINS.map((d) => [d, ['src/model.ts']])),
       notDispatched: [],
+      fullyCached: [],
       skipped: 0,
       nextCache: {}
     }
@@ -296,7 +335,7 @@ test('every auditor opens with a closed output contract', () => {
     assert.match(body, /^## Output contract/m, `${name} declares an output contract`)
     assert.ok(
       body.indexOf('## Output contract') < body.indexOf('## Calibration'),
-      `${name} states the contract before the hunting instructions`
+      `${name} states the contract before the ## Calibration section`
     )
     assert.ok(
       brief.includes(`${name}: no findings`),

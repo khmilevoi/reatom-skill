@@ -15,6 +15,14 @@ two drift.
 - `anti-pattern` — does something the skill forbids outright
 - `hygiene` — traceability and subscription discipline
 
+`trigger` is a comma-separated list of literal, **case-sensitive** substrings. The
+gate's router (`hooks/gate-logic.js`) tests each one with plain `String.includes`
+against a file's raw text — there is no tokenizing, word-boundary matching, or
+case-folding. `isLoading` does not match `isBalanceLoading`, and `useEffect` does
+not match `UseEffect`. Triggers are deliberately wide: a token that also fires on
+unrelated code is a cheaper mistake than a token that misses a real violation, so
+prefer a trigger that over-matches to one that is precise but silent.
+
 ### RTM-A01 — Async reads use computed + withAsyncData
 - domain: async
 - kind: reinvention

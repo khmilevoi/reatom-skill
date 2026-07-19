@@ -26,6 +26,20 @@ exists to prevent.
 
 Review the diff after syncing. It is the only review the vendored content gets.
 
+## Regenerating the per-domain rule slices
+
+```bash
+npm run build-slices
+```
+
+`skills/reatom/references/rules-async.md`, `rules-state.md`, `rules-lifecycle.md`,
+`rules-routing-forms.md` and `rules-react.md` are generated from `rules.md` by
+`development/build-rule-slices.js`; each is the subset of rules whose `domain:` matches
+the slice, and each is what its auditor actually reads — no auditor reads the full
+`rules.md`. **Never hand-edit the slices.** Every one carries a `DO NOT EDIT` banner
+naming the generator, and a test compares each on-disk slice to a fresh regeneration
+byte-for-byte. Edit `rules.md` and re-run `build-slices` instead.
+
 ## Tests
 
 ```bash
