@@ -255,3 +255,107 @@ With skill:
 - "Using `ctx.schedule(fn, ms)` for debounce — schedules the fetch after a delay" ← debounced-search, without-skill (v3 API fallback)
 - "Uses 4 `reatomAsync` actions (v3 API) with `canLoadAtom` enabled gate" ← react-hook-orchestration, without-skill (enabled-flag anti-pattern)
 - "Uses `withStatusesAtom` for loading/error state" ← react-hook-orchestration, without-skill (v3 API fallback)
+
+---
+
+# Iteration 3
+
+Ran 2026-07-20, after the token-optimization branch (plugin 0.2.0). Executor: the shipped
+`agents/audit-*.md` briefs on their declared model, dispatched with the exact per-auditor orders
+`hooks/route.js` produced. This is the first calibration run against routed file lists and
+per-domain registry slices rather than a five-way fan-out over the whole changed set.
+
+A first attempt was discarded before scoring. `${CLAUDE_PLUGIN_ROOT}` resolved to the install-time
+plugin cache at `0.1.0`, so every auditor read the pre-branch registry and pre-branch briefs. The
+run measured the old configuration and is not recorded here. The plugin was updated to `0.2.0` and
+reloaded before the run below.
+
+## Violations corpus
+
+| Auditor | Files routed to it | Expected ids | Found | False positives |
+| --- | --- | --- | --- | --- |
+| `audit-async` | 5 of 6 | A03, A05, A04, A03, A06, A02 | 6/6 | 0 |
+| `audit-state` | 6 of 6 | S06, S01 | 2/2 | 0 |
+| `audit-lifecycle` | 3 of 6 | L01 | 1/1 | 0 |
+| `audit-react` | 1 of 6 | none | sentinel | 0 |
+| `audit-routing-forms` | not dispatched | none | not run | 0 |
+
+**9 of 9 expected rule ids found, zero false positives.**
+
+Two results worth naming:
+
+- `audit-state` found **RTM-S06** in `enabled-flags.ts`. That is the rule this branch moved out of the
+  adapter-bound `react` domain. Under the previous ownership `audit-react` owned it and routing does not
+  send `enabled-flags.ts` to `audit-react` at all, so the rule would have gone unchecked. The re-domain
+  is confirmed correct by observation, not only by the fixture routing test.
+- `audit-routing-forms` was never dispatched. No file in the corpus carries routing, forms or
+  persistence code, and the router said so on the "Not dispatched" line rather than silently.
+
+## Clean control: two failures
+
+`skills/reatom/references/golden-example.md`, dispatched to all five. Any finding is a failure.
+
+**Failure 1 — the fixture was genuinely wrong.** `audit-state` reported RTM-S04 against the row-name
+`onChange` handler, which performed two model sets in the view (`user.name.set(...)` then
+`user.dirty.setTrue()`). Investigated per `fixtures/README.md`: RTM-S04's `detect` is "a DOM handler
+performing two or more model sets" and its only exception covers a single trivial set, so the rule
+applied exactly. The file also contradicted itself, already grouping an analogous pair into a named
+`save` action on the same model. **The auditor was right and the golden example was wrong.** Fixed by
+adding a named `edit` action to `reatomUser`; the handler now calls it.
+
+This is the second time this file has shipped a defect: the previous iteration's final review found it
+claiming `withAsyncData` provides `status` without the opt-in. Both times the file was treated as
+"unchanged" by a plan and given no owner.
+
+**Failure 2 — a false positive.** On the re-run, `audit-state` reported RTM-S02 against the search
+`onChange` handler, which sets `search` and resets `page` together. RTM-S02's `detect` requires "the
+same derived reset repeated at multiple call sites", and its `exception` explicitly permits "a single
+trivial paired set inside one user gesture". There is exactly one such handler. The auditor cited
+`react-guide.md` but did not apply its own rule's exception. **The fixture was not changed.**
+
+Per this project's own doctrine a false positive costs more than a miss, so this is the more serious
+of the two. It is a brief/calibration problem, not a routing or slicing problem: the auditor had the
+correct slice and the exception text was in it.
+
+## Output contract: partial
+
+Task 5 rewrote every brief so a clean result is the bare sentinel line and nothing else.
+
+| Auditor | Clean-control reply |
+| --- | --- |
+| `audit-lifecycle` | bare sentinel |
+| `audit-routing-forms` | bare sentinel |
+| `audit-react` | sentinel preceded by a paragraph |
+| `audit-async` | sentinel preceded by a paragraph |
+
+**3 of 5 complied.** On the violations corpus `audit-react` emitted a bare sentinel, so the contract
+does hold under some conditions; both violations occurred where the auditor had to reason about why
+nothing matched and then explained that reasoning.
+
+Compare with the discarded pre-branch run, where `audit-react` wrapped its sentinel in three
+paragraphs. The contract improved compliance without securing it. The spec anticipated this and named
+the fallback: the main agent discards any auditor reply that does not match the finding grammar. That
+fallback is still unbuilt.
+
+## Token cost, same corpus, same file lists
+
+Subagent tokens, pre-branch briefs and full registry versus post-branch briefs and per-domain slices:
+
+| Auditor | Before | After |
+| --- | --- | --- |
+| `audit-async` | 43 132 | 23 109 |
+| `audit-state` | 37 986 | 24 718 |
+| `audit-lifecycle` | 26 575 | 32 223 |
+| `audit-react` | 17 530 | 11 539 |
+| **Total** | **125 223** | **91 589** |
+
+**-27% on identical file lists**, isolating the slice effect from the routing effect. `audit-lifecycle`
+rose; single runs of a stochastic executor, so treat individual rows as noise and the total as the
+signal.
+
+## Open after this iteration
+
+- RTM-S02's `detect`/`exception` wording, or `audit-state`'s brief, needs to make exception-checking
+  harder to skip. One false positive on the clean control.
+- The mechanical fallback for output-contract violations is unbuilt.
+- `golden-example.md` still has no owner in any plan and has now shipped two defects.

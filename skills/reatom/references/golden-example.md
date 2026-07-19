@@ -59,12 +59,17 @@ const reatomUser = (dto: UserDto, modelName: string): UserModel => {
   const selected = reatomBoolean(false, `${modelName}.selected`)
   const dirty = reatomBoolean(false, `${modelName}.dirty`)
 
+  const edit = action((value: string) => {
+    name.set(value)
+    dirty.setTrue()
+  }, `${modelName}.edit`)
+
   const save = action(async () => {
     await wrap(api.saveUser({ id: dto.id, name: name() }))
     dirty.setFalse()
   }, `${modelName}.save`).extend(withAsync())
 
-  return { id: dto.id, name, selected, dirty, save }
+  return { id: dto.id, name, selected, dirty, edit, save }
 }
 
 type UserModel = ReturnType<typeof reatomUser>
@@ -113,10 +118,7 @@ export const UsersSearch = reatomComponent(() => {
             />
             <input
               value={user.name()}
-              onChange={wrap((event) => {
-                user.name.set(event.currentTarget.value)
-                user.dirty.setTrue()
-              })}
+              onChange={wrap((event) => user.edit(event.currentTarget.value))}
             />
             <button
               disabled={!user.dirty() || !user.save.ready()}
