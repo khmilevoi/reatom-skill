@@ -16,14 +16,22 @@ invisible to it.
 
 ## Run
 
-Dispatch these five read-only auditors IN PARALLEL, one Agent call each, giving
-every one the file list and the registry path:
+Get the dispatch orders first — the router decides which auditors can fire on
+which files, using the same code the Stop gate uses:
 
-- `audit-async`
-- `audit-state`
-- `audit-lifecycle`
-- `audit-routing-forms`
-- `audit-react`
+```bash
+node "${CLAUDE_PLUGIN_ROOT}/hooks/route.js" --no-cache <paths…>
+```
+
+With no paths, pass the changed set the gate would use: TypeScript across
+`merge-base(HEAD, main)..HEAD` plus the working tree.
+
+Dispatch exactly the auditors the router names, IN PARALLEL, one Agent call each,
+giving each one only the files listed under its own name and the slice it names.
+
+`--no-cache` is deliberate. The gate skips files it has already audited; this
+command exists to look at code the gate never sees, including code that has not
+changed, so it audits everything you point it at.
 
 ## Report
 

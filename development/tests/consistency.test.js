@@ -2,6 +2,7 @@ const { test } = require('node:test')
 const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
+const { spawnSync } = require('node:child_process')
 const { sliceRegistry, sliceFileName, DOMAINS: SLICE_DOMAINS } = require('../rule-slices')
 
 const ROOT = path.join(__dirname, '..', '..')
@@ -302,4 +303,25 @@ test('every auditor opens with a closed output contract', () => {
       `${name} spells out its own sentinel line`
     )
   }
+})
+
+test('the command routes through the same code as the gate', () => {
+  const command = fs.readFileSync(path.join(ROOT, 'commands', 'reatom-audit.md'), 'utf8')
+  assert.ok(command.includes('hooks/route.js'), 'the command calls the shared router')
+  assert.ok(command.includes('--no-cache'), 'the command disables incrementality')
+  assert.ok(
+    !/Dispatch these five/.test(command),
+    'the command no longer hard-codes a five-way fan-out'
+  )
+})
+
+test('route.js prints per-auditor orders for a real file', () => {
+  const target = path.join('development', 'fixtures', 'violations', 'polling-timer.ts')
+  const out = spawnSync('node', [path.join(ROOT, 'hooks', 'route.js'), '--no-cache', target], {
+    cwd: ROOT,
+    encoding: 'utf8'
+  })
+  assert.equal(out.status, 0, out.stderr)
+  assert.match(out.stdout, /audit-lifecycle \(references\/rules-lifecycle\.md\)/)
+  assert.match(out.stdout, /polling-timer\.ts/)
 })
