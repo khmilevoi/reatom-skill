@@ -1,8 +1,7 @@
 {
   "name": "reatom-claude-plugin",
-  "version": "0.1.0",
   "private": true,
-  "description": "Development scripts and tests for the reatom Claude Code plugin",
+  "description": "Development scripts and tests for the reatom Claude Code plugin. Not published; the plugin's own version lives in .claude-plugin/plugin.json and is deliberately not duplicated here.",
   "scripts": {
     "test": "node --test \"development/tests/**/*.test.js\"",
     "sync-upstream": "node development/sync-upstream.js",
