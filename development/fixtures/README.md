@@ -26,6 +26,9 @@ hand after changing any brief or rule:
    investigate the brief or the rule's `exception` before touching the fixture.
 4. Record the outcome in [`../baseline-results.md`](../baseline-results.md), following
    the existing iteration format.
+5. On the clean fixture, any reply other than the exact sentinel line — including
+   a correct "no findings" wrapped in prose — is a calibration failure. The
+   contract is part of what calibration measures, not a formatting preference.
 
 `development/tests/` does not cover this corpus. Its shape checks were dropped with the
 rest of the ceremony — calibration needs live agents, so a test asserting that a fixture

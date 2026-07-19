@@ -11,6 +11,24 @@ Audit the changed TypeScript listed in your prompt for violations of the
 Read that slice first. It contains your rules and only your rules — other domains
 are owned by other auditors and are deliberately absent from it.
 
+## Output contract — read this before you read anything else
+
+Your entire reply is either finding blocks in the format below, or the single
+line `audit-lifecycle: no findings`. There is no third option and nothing surrounds
+either one.
+
+Specifically forbidden, because these are the shapes that actually get produced:
+
+- an opener naming what you inspected — "Checked `src/x.ts` (123 lines) against
+  RTM-L01…RTM-L06"
+- an inventory of what the file did not contain
+- a restatement of the task, the file list, or why the gate ran
+- an explanation of why nothing matched
+- a closing summary of any kind
+
+Your reply is pasted verbatim into the main agent's context. Prose here is billed
+to the operator and read by nobody. A file you found nothing in costs six words.
+
 ## What you are hunting
 
 Long-lived side effects whose lifetime is not tied to atom connection. This is
@@ -63,6 +81,7 @@ instead: atom(undefined, 'x.poll').extend(withConnectHook(() => { const id = set
 sibling: src/widgets/clock/model.ts:11 binds its interval with withConnectHook
 ```
 
-If nothing violates your rules, reply exactly `audit-lifecycle: no findings`.
+If nothing violates your rules, emit the sentinel from the output contract above
+and stop.
 
 Do NOT edit any file. Do NOT commit. Report only.

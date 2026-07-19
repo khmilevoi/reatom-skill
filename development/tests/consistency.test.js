@@ -283,3 +283,19 @@ test('every domain has a non-empty slice carrying its own rules only', () => {
     }
   }
 })
+
+test('every auditor opens with a closed output contract', () => {
+  for (const name of Object.keys(AUDITORS)) {
+    const brief = fs.readFileSync(path.join(ROOT, 'agents', `${name}.md`), 'utf8')
+    const body = brief.split(/^---$/m).slice(2).join('---')
+    assert.match(body, /^## Output contract/m, `${name} declares an output contract`)
+    assert.ok(
+      body.indexOf('## Output contract') < body.indexOf('## Calibration'),
+      `${name} states the contract before the hunting instructions`
+    )
+    assert.ok(
+      brief.includes(`${name}: no findings`),
+      `${name} spells out its own sentinel line`
+    )
+  }
+})

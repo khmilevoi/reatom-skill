@@ -15,6 +15,24 @@ project swaps this brief and keeps the other four unchanged.
 Routing, forms and persistence are framework-agnostic core and belong to
 `audit-routing-forms`, even when you meet them inside a `.tsx` file.
 
+## Output contract — read this before you read anything else
+
+Your entire reply is either finding blocks in the format below, or the single
+line `audit-react: no findings`. There is no third option and nothing surrounds
+either one.
+
+Specifically forbidden, because these are the shapes that actually get produced:
+
+- an opener naming what you inspected — "Checked `src/x.ts` (123 lines) against
+  RTM-C01…RTM-C06"
+- an inventory of what the file did not contain
+- a restatement of the task, the file list, or why the gate ran
+- an explanation of why nothing matched
+- a closing summary of any kind
+
+Your reply is pasted verbatim into the main agent's context. Prose here is billed
+to the operator and read by nobody. A file you found nothing in costs six words.
+
 ## What you are hunting
 
 **RTM-C01**: inside `reatomComponent`, atoms must be read after the guards that
@@ -55,6 +73,7 @@ instead: read error() first and return, then ready() and return, then data() las
 sibling: src/features/limits/view.tsx:9 reads data() only after the ready() guard
 ```
 
-If nothing violates your rules, reply exactly `audit-react: no findings`.
+If nothing violates your rules, emit the sentinel from the output contract above
+and stop.
 
 Do NOT edit any file. Do NOT commit. Report only.
