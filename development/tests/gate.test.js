@@ -4,7 +4,7 @@ const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
 const { spawnSync } = require('node:child_process')
-const { computeMarker, auditableFiles, gateDecision } = require('../../hooks/gate-logic')
+const { computeMarker, auditableFiles, gateDecision, DOMAINS } = require('../../hooks/gate-logic')
 
 const GATE = path.join(__dirname, '..', '..', 'hooks', 'reatom-gate.js')
 
@@ -212,4 +212,81 @@ test('every calibration fixture routes to the domains owning its expected rules'
     }
   }
   assert.deepEqual(missed, [], `routing drops known violations: ${missed.join(' | ')}`)
+})
+
+const { pairKey, pairHash, parseCache, planAudit } = require('../../hooks/gate-logic')
+
+const SLICES = { async: 'A', state: 'S', lifecycle: 'L', 'routing-forms': 'R', react: 'C' }
+const readSlice = (domain) => SLICES[domain]
+
+function plan(files, contents, cache = {}) {
+  return planAudit({ files, readFile: (f) => contents[f], readSlice, cache, triggers: TRIGGERS })
+}
+
+test('parseCache treats anything that is not a plain object as empty', () => {
+  assert.deepEqual(parseCache('{"a":"b"}'), { a: 'b' })
+  assert.deepEqual(parseCache('9d8c7b6a'), {}, 'legacy hex marker')
+  assert.deepEqual(parseCache('1234567890'), {}, 'an all-digit hash parses as a number')
+  assert.deepEqual(parseCache('[1,2]'), {}, 'arrays are not caches')
+  assert.deepEqual(parseCache(null), {})
+})
+
+test('planAudit assigns a file only to the domains that can fire on it', () => {
+  const contents = { 'src/poll.ts': fs.readFileSync(
+    path.join(__dirname, '..', 'fixtures', 'violations', 'polling-timer.ts'), 'utf8') }
+  const { assignments, notDispatched } = plan(['src/poll.ts'], contents)
+  assert.ok(assignments.lifecycle.includes('src/poll.ts'))
+  assert.ok(notDispatched.includes('routing-forms'), 'a domain with no work is not dispatched')
+  assert.ok(!('routing-forms' in assignments), 'empty domains are absent, not empty arrays')
+})
+
+test('an unchanged pair is skipped on the second plan', () => {
+  const contents = { 'src/a.ts': 'export const x = atom(1, "x")\n' }
+  const first = plan(['src/a.ts'], contents)
+  assert.ok(Object.keys(first.assignments).length > 0)
+  const second = plan(['src/a.ts'], contents, first.nextCache)
+  assert.deepEqual(second.assignments, {}, 'nothing to re-audit')
+  assert.ok(second.skipped > 0, 'and the skip is counted')
+})
+
+test('changed contents re-audit even when the file list is identical', () => {
+  const before = { 'src/a.ts': 'export const x = atom(1, "x")\n' }
+  const after = { 'src/a.ts': 'export const x = atom(2, "x")\n' }
+  const first = plan(['src/a.ts'], before)
+  const second = plan(['src/a.ts'], after, first.nextCache)
+  assert.ok(Object.keys(second.assignments).length > 0, 'content edits are not invisible')
+})
+
+test('editing one domain slice invalidates that domain and no other', () => {
+  const contents = { 'src/a.ts': 'const t = setInterval(f, 1)\nconst x = atom(1, "x")\n' }
+  const first = plan(['src/a.ts'], contents)
+  assert.ok(first.assignments.state && first.assignments.lifecycle)
+  const edited = { ...SLICES, lifecycle: 'L2' }
+  const second = planAudit({
+    files: ['src/a.ts'],
+    readFile: (f) => contents[f],
+    readSlice: (d) => edited[d],
+    cache: first.nextCache,
+    triggers: TRIGGERS
+  })
+  assert.deepEqual(Object.keys(second.assignments), ['lifecycle'])
+})
+
+test('the cache is pruned to the current file set', () => {
+  const contents = { 'src/a.ts': 'atom(1, "a")\n', 'src/b.ts': 'atom(2, "b")\n' }
+  const first = plan(['src/a.ts', 'src/b.ts'], contents)
+  const second = plan(['src/a.ts'], contents, first.nextCache)
+  const stale = Object.keys(second.nextCache).filter((k) => k.startsWith('src/b.ts'))
+  assert.deepEqual(stale, [], 'pairs for files no longer in scope are dropped')
+})
+
+test('an unreadable file fails open into every domain', () => {
+  const { assignments } = planAudit({
+    files: ['src/gone.ts'],
+    readFile: () => { throw new Error('ENOENT') },
+    readSlice,
+    cache: {},
+    triggers: TRIGGERS
+  })
+  assert.deepEqual(Object.keys(assignments).sort(), [...DOMAINS].sort())
 })
