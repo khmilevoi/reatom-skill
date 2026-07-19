@@ -94,14 +94,21 @@ function main() {
       if (ctx.isReatomProject) {
         ctx.auditableFiles = auditableFiles(changedFiles(cwd))
         if (ctx.auditableFiles.length > 0) {
-          const rules = fs.readFileSync(path.join(REFERENCES, 'rules.md'), 'utf8')
-          ctx.plan = planAudit({
-            files: ctx.auditableFiles,
-            readFile: (f) => fs.readFileSync(path.join(cwd, f), 'utf8'),
-            readSlice: (d) => fs.readFileSync(path.join(REFERENCES, `rules-${d}.md`), 'utf8'),
-            cache: readCache(cwd),
-            triggers: buildTriggers(rules)
-          })
+          let rules = null
+          try {
+            rules = fs.readFileSync(path.join(REFERENCES, 'rules.md'), 'utf8')
+          } catch {
+            // fail-open: an unreadable registry leaves ctx.plan null
+          }
+          if (rules !== null) {
+            ctx.plan = planAudit({
+              files: ctx.auditableFiles,
+              readFile: (f) => fs.readFileSync(path.join(cwd, f), 'utf8'),
+              readSlice: (d) => fs.readFileSync(path.join(REFERENCES, `rules-${d}.md`), 'utf8'),
+              cache: readCache(cwd),
+              triggers: buildTriggers(rules)
+            })
+          }
         }
       }
     }

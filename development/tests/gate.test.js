@@ -64,6 +64,16 @@ test('the block reason lists files under each dispatched auditor only', () => {
   assert.match(reason, /dismiss/i)
 })
 
+test('the block reason truncates a long file list within one auditor', () => {
+  const many = Array.from({ length: 45 }, (_, i) => `src/f${i}.ts`)
+  const ctx = { ...base, plan: { ...base.plan, assignments: { state: many } } }
+  const { reason } = gateDecision(ctx)
+  assert.match(reason, /audit-state \(references\/rules-state\.md\)/)
+  assert.match(reason, /src\/f39\.ts/, 'the last file within the cap is listed')
+  assert.ok(!reason.includes('src/f40.ts'), 'files past the cap are not listed individually')
+  assert.match(reason, /…and 5 more — audit them too/)
+})
+
 function makeRepo({ reatom = true, changed = 'src/model.ts' } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'reatom-gate-'))
   const git = (args) => spawnSync('git', args, { cwd: dir, encoding: 'utf8' })
@@ -172,6 +182,43 @@ test('integration: a non-git directory allows silently', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'reatom-nogit-'))
   fs.writeFileSync(path.join(dir, 'package.json'), '{"dependencies":{"@reatom/core":"1001.0.0"}}')
   assert.equal(runGate(dir).stdout.trim(), '')
+})
+
+// REFERENCES in reatom-gate.js is resolved from the gate file's own location
+// (__dirname), not from the target repo's cwd. So to prove the gate fails
+// open when the rule registry is unreadable, without touching the checked-out
+// skills/reatom/references/rules.md, we run a scratch copy of the plugin —
+// hooks/ plus the reference slices — with rules.md withheld from the copy.
+function makeGateWithoutRegistry() {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'reatom-gate-noregistry-'))
+  const hooksSrc = path.join(__dirname, '..', '..', 'hooks')
+  const refsSrc = path.join(__dirname, '..', '..', 'skills', 'reatom', 'references')
+  const hooksDst = path.join(dir, 'hooks')
+  const refsDst = path.join(dir, 'skills', 'reatom', 'references')
+  fs.mkdirSync(hooksDst, { recursive: true })
+  fs.mkdirSync(refsDst, { recursive: true })
+  for (const name of fs.readdirSync(hooksSrc)) {
+    fs.copyFileSync(path.join(hooksSrc, name), path.join(hooksDst, name))
+  }
+  for (const name of fs.readdirSync(refsSrc)) {
+    if (name === 'rules.md') continue // the one file this scratch copy withholds
+    const src = path.join(refsSrc, name)
+    if (fs.statSync(src).isDirectory()) continue
+    fs.copyFileSync(src, path.join(refsDst, name))
+  }
+  return path.join(hooksDst, 'reatom-gate.js')
+}
+
+test('integration: an unreadable rule registry allows silently instead of crashing', () => {
+  const dir = makeRepo()
+  const gate = makeGateWithoutRegistry()
+  const result = spawnSync('node', [gate], {
+    input: JSON.stringify({ cwd: dir, stop_hook_active: false }),
+    encoding: 'utf8'
+  })
+  assert.equal(result.status, 0, 'a missing registry must not crash the process')
+  assert.equal(result.stdout.trim(), '', 'a missing registry must allow, not block')
+  assert.equal(result.stderr.trim(), '', 'no stack trace should reach stderr either')
 })
 
 const { buildTriggers, routeFile } = require('../../hooks/gate-logic')

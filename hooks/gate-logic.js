@@ -1,13 +1,5 @@
 const crypto = require('node:crypto')
 
-const AUDITORS = [
-  'audit-async',
-  'audit-state',
-  'audit-lifecycle',
-  'audit-routing-forms',
-  'audit-react'
-]
-
 const MAX_LISTED_FILES = 40
 
 function auditableFiles(files) {
