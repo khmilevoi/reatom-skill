@@ -35,10 +35,36 @@ function isReatomProject(cwd) {
   return false
 }
 
+const BASE_CANDIDATES = ['main', 'master', 'develop', 'trunk']
+
+function refExists(cwd, ref) {
+  return git(cwd, ['rev-parse', '--verify', '--quiet', `${ref}^{commit}`]) !== null
+}
+
+// Never hits the network: origin/HEAD is a local symbolic ref written by
+// `clone` and `git remote set-head`, and the candidate list is pure ref lookup.
+function detectBaseRef(cwd) {
+  const head = git(cwd, ['symbolic-ref', '-q', 'refs/remotes/origin/HEAD'])
+  if (head !== null) {
+    const ref = head.trim()
+    if (ref && refExists(cwd, ref)) return { ref, guessed: false }
+  }
+
+  for (const name of BASE_CANDIDATES) {
+    for (const ref of [`refs/heads/${name}`, `refs/remotes/origin/${name}`]) {
+      if (refExists(cwd, ref)) return { ref, guessed: false }
+    }
+  }
+
+  return { ref: null, guessed: true }
+}
+
 // Committed branch work plus the working tree. `architecture` only looks at
 // uncommitted changes; agents commit mid-session, so that would go blind.
-function changedFiles(cwd) {
-  const base = git(cwd, ['merge-base', 'HEAD', 'main'])
+// A null baseRef means no base branch was found — the working tree is all
+// that stays in scope, which is the pre-detection behaviour.
+function changedFiles(cwd, baseRef) {
+  const base = baseRef ? git(cwd, ['merge-base', 'HEAD', baseRef]) : null
   const committed = base ? git(cwd, ['diff', '--diff-filter=d', '--name-only', base.trim(), 'HEAD']) || '' : ''
   const working = git(cwd, ['diff', '--diff-filter=d', '--name-only', 'HEAD']) || ''
   const untracked = git(cwd, ['ls-files', '--others', '--exclude-standard']) || ''
@@ -92,7 +118,7 @@ function main() {
     if (ctx.isGitRepo) {
       ctx.isReatomProject = isReatomProject(cwd)
       if (ctx.isReatomProject) {
-        ctx.auditableFiles = auditableFiles(changedFiles(cwd))
+        ctx.auditableFiles = auditableFiles(changedFiles(cwd, detectBaseRef(cwd).ref))
         if (ctx.auditableFiles.length > 0) {
           let rules = null
           try {

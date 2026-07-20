@@ -118,10 +118,10 @@ test('the block reason truncates a long file list within one auditor', () => {
   assert.match(reason, /…and 5 more — audit them too/)
 })
 
-function makeRepo({ reatom = true, changed = 'src/model.ts' } = {}) {
+function makeRepo({ reatom = true, changed = 'src/model.ts', branch = 'main' } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'reatom-gate-'))
   const git = (args) => spawnSync('git', args, { cwd: dir, encoding: 'utf8' })
-  git(['init', '-q', '-b', 'main'])
+  git(['init', '-q', '-b', branch])
   git(['config', 'user.email', 't@t'])
   git(['config', 'user.name', 't'])
   fs.writeFileSync(
@@ -455,4 +455,39 @@ test('an unreadable file fails open into every domain', () => {
     triggers: TRIGGERS
   })
   assert.deepEqual(Object.keys(assignments).sort(), [...DOMAINS].sort())
+})
+
+// Commits a TypeScript file on a fresh branch off the repo's default branch.
+// The file is committed, not left dirty, so it can only reach an auditor
+// through the merge-base diff — which is exactly what base detection feeds.
+function commitOnFeatureBranch(dir, file = 'src/committed.ts') {
+  const git = (args) => spawnSync('git', args, { cwd: dir, encoding: 'utf8' })
+  git(['checkout', '-q', '-b', 'feature'])
+  const full = path.join(dir, file)
+  fs.mkdirSync(path.dirname(full), { recursive: true })
+  fs.writeFileSync(full, 'export const z = setInterval(() => {}, 1000)\n')
+  git(['add', '.'])
+  git(['commit', '-q', '-m', 'feature work'])
+}
+
+test('integration: committed work is audited when the base branch is master, not main', () => {
+  const dir = makeRepo({ changed: null, branch: 'master' })
+  commitOnFeatureBranch(dir)
+  const out = JSON.parse(runGate(dir).stdout.trim())
+  assert.equal(out.decision, 'block')
+  assert.match(out.reason, /committed\.ts/)
+})
+
+test('integration: origin/HEAD names the base branch when no conventional name exists', () => {
+  const dir = makeRepo({ changed: null, branch: 'release' })
+  const git = (args) => spawnSync('git', args, { cwd: dir, encoding: 'utf8' })
+  // Fake what `clone` leaves behind, without a network: a remote-tracking ref
+  // at the default branch's tip, plus origin/HEAD pointing symbolically at it.
+  const sha = git(['rev-parse', 'HEAD']).stdout.trim()
+  git(['update-ref', 'refs/remotes/origin/release', sha])
+  git(['symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/release'])
+  commitOnFeatureBranch(dir)
+  const out = JSON.parse(runGate(dir).stdout.trim())
+  assert.equal(out.decision, 'block')
+  assert.match(out.reason, /committed\.ts/)
 })
