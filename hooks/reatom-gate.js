@@ -78,18 +78,26 @@ function refExists(cwd, ref) {
 
 // Never hits the network: origin/HEAD is a local symbolic ref written by
 // `clone` and `git remote set-head`, and the candidate list is pure ref lookup.
-function detectBaseRef(cwd) {
+// Cheap enough to re-run on every resolve, unlike the heuristic below.
+function cheapBaseRef(cwd) {
   const head = git(cwd, ['symbolic-ref', '-q', 'refs/remotes/origin/HEAD'])
   if (head !== null) {
     const ref = head.trim()
-    if (ref && refExists(cwd, ref)) return { ref, guessed: false }
+    if (ref && refExists(cwd, ref)) return ref
   }
 
   for (const name of BASE_CANDIDATES) {
     for (const ref of [`refs/heads/${name}`, `refs/remotes/origin/${name}`]) {
-      if (refExists(cwd, ref)) return { ref, guessed: false }
+      if (refExists(cwd, ref)) return ref
     }
   }
+
+  return null
+}
+
+function detectBaseRef(cwd) {
+  const cheap = cheapBaseRef(cwd)
+  if (cheap) return { ref: cheap, guessed: false }
 
   const guess = guessBaseRef(cwd)
   return { ref: guess, guessed: true }
@@ -107,33 +115,69 @@ function baseWarning(ref, pinFile) {
   return ref
     ? `Reatom gate guessed the base branch as "${ref}" from the commit graph — ` +
       `no origin/HEAD and no ${BASE_CANDIDATES.join('/')} branch was found. ` +
-      `If that is wrong, write the correct ref into ${pinFile} (or ask the agent to).`
+      `This guess is rechecked automatically if a better answer shows up later. ` +
+      `To pin it permanently instead, or to correct it, write the ref into ${pinFile}.`
     : `Reatom gate could not identify a base branch, so only working-tree changes ` +
-      `are audited and committed branch work goes unchecked. If this repo has a ` +
-      `base branch, write its ref into ${pinFile} (or ask the agent to).`
+      `are audited and committed branch work goes unchecked. This is rechecked ` +
+      `automatically if a base branch appears later. To pin an answer permanently ` +
+      `(or write "none" to silence this for good), edit ${pinFile}.`
 }
 
-// The pin exists so detection runs once and so the operator has somewhere
-// concrete to correct a wrong answer. A pin that stops resolving — the branch
-// was renamed or deleted — is discarded and re-detected rather than trusted.
-function resolveBaseRef(cwd) {
-  const pinFile = baseCachePath(cwd)
-  let pinned = null
-  try {
-    pinned = fs.readFileSync(pinFile, 'utf8').trim()
-  } catch {
-    // no pin yet → detect below
+const AUTO_SUFFIX = ' auto'
+
+// A pin the gate wrote itself is marked so it can be revisited cheaply later;
+// a pin the operator wrote by hand (no suffix) is trusted forever, which is
+// the whole point of letting them override a wrong guess.
+function parsePin(raw) {
+  const trimmed = raw.trim()
+  if (!trimmed) return null
+  if (trimmed.endsWith(AUTO_SUFFIX)) {
+    return { value: trimmed.slice(0, -AUTO_SUFFIX.length), auto: true }
   }
+  return { value: trimmed, auto: false }
+}
 
-  if (pinned === NO_BASE) return { ref: null, warning: null }
-  if (pinned && refExists(cwd, pinned)) return { ref: pinned, warning: null }
-
-  const { ref, guessed } = detectBaseRef(cwd)
+function writePin(pinFile, value) {
   try {
-    fs.writeFileSync(pinFile, (ref || NO_BASE) + '\n')
+    fs.writeFileSync(pinFile, value + AUTO_SUFFIX + '\n')
   } catch {
     // fail-open: the pin is only a shortcut, detection already answered
   }
+}
+
+// The pin exists so detection runs once and so the operator has somewhere
+// concrete to correct a wrong answer. A manually-written pin (no auto suffix)
+// is trusted forever — that is what the operator asked for. An auto-written
+// pin (the gate's own guess, or "nothing found") gets a cheap origin/HEAD +
+// conventional-name recheck on every run, so a base branch that appears later
+// is picked up without waiting on the guess to go stale on its own.
+function resolveBaseRef(cwd) {
+  const pinFile = baseCachePath(cwd)
+  let raw = null
+  try {
+    raw = fs.readFileSync(pinFile, 'utf8')
+  } catch {
+    // no pin yet → detect below
+  }
+  const pin = raw ? parsePin(raw) : null
+
+  if (pin && !pin.auto) {
+    if (pin.value === NO_BASE) return { ref: null, warning: null }
+    if (refExists(cwd, pin.value)) return { ref: pin.value, warning: null }
+    // manual pin no longer resolves → fall through to fresh detection
+  } else if (pin && pin.auto) {
+    const cheap = cheapBaseRef(cwd)
+    if (cheap) {
+      writePin(pinFile, cheap)
+      return { ref: cheap, warning: null }
+    }
+    if (pin.value === NO_BASE) return { ref: null, warning: null }
+    if (refExists(cwd, pin.value)) return { ref: pin.value, warning: null }
+    // stale auto guess → fall through to fresh detection
+  }
+
+  const { ref, guessed } = detectBaseRef(cwd)
+  writePin(pinFile, ref || NO_BASE)
   return { ref, warning: guessed ? baseWarning(ref, pinFile) : null }
 }
 

@@ -521,7 +521,7 @@ test('integration: detection pins the base branch into .git', () => {
   commitOnFeatureBranch(dir)
   runGate(dir)
   const pinned = fs.readFileSync(path.join(dir, '.git', BASE_PIN), 'utf8').trim()
-  assert.equal(pinned, 'refs/heads/master')
+  assert.equal(pinned, 'refs/heads/master auto')
 })
 
 test('integration: a "none" pin narrows the audit to the working tree', () => {
@@ -554,7 +554,7 @@ test('integration: a pin that no longer resolves falls back to fresh detection',
   assert.match(out.reason, /committed\.ts/)
   assert.equal(
     fs.readFileSync(path.join(dir, '.git', BASE_PIN), 'utf8').trim(),
-    'refs/heads/master',
+    'refs/heads/master auto',
     'the stale pin is replaced with what detection found'
   )
 })
@@ -590,4 +590,49 @@ test('integration: a base branch found by name warns about nothing', () => {
   const out = JSON.parse(runGate(dir).stdout.trim())
   assert.equal(out.decision, 'block')
   assert.ok(!out.systemMessage, 'a conventional name is not a guess')
+})
+
+test('integration: an auto "none" pin self-heals once origin/HEAD appears', () => {
+  const dir = makeRepo({ changed: null, branch: 'release' })
+  // First run: one branch, nothing to compare HEAD against at all.
+  const first = JSON.parse(runGate(dir).stdout.trim())
+  assert.ok(!first.decision, 'nothing to audit yet')
+  assert.match(first.systemMessage, /could not identify a base branch/)
+
+  commitOnFeatureBranch(dir)
+  // Still nothing origin/HEAD or a conventional name can find — the auto
+  // "none" pin still applies, silently (no repeat warning). With base.ref
+  // null, the committed work on `feature` stays out of scope too, so there
+  // is nothing to block on and nothing to warn about: main() writes no
+  // stdout at all in that case (same as any other fully-silent run).
+  const secondRaw = runGate(dir).stdout.trim()
+  const second = secondRaw ? JSON.parse(secondRaw) : {}
+  assert.ok(!second.decision, 'the auto pin still applies until something confidently resolves')
+  assert.ok(!second.systemMessage, 'no repeat warning on an unchanged auto pin')
+
+  // A base branch shows up later — origin/HEAD gets configured.
+  const git = (args) => spawnSync('git', args, { cwd: dir, encoding: 'utf8' })
+  const sha = git(['rev-parse', 'refs/heads/release']).stdout.trim()
+  git(['update-ref', 'refs/remotes/origin/release', sha])
+  git(['symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/release'])
+
+  const third = JSON.parse(runGate(dir).stdout.trim())
+  assert.equal(third.decision, 'block', 'the auto pin self-healed once origin/HEAD appeared')
+  assert.match(third.reason, /committed\.ts/)
+  assert.ok(!third.systemMessage, 'the self-heal itself is silent, not a fresh warning')
+})
+
+test('integration: a manually-written "none" pin stays sticky even after origin/HEAD appears', () => {
+  const dir = makeRepo({ changed: null, branch: 'release' })
+  commitOnFeatureBranch(dir)
+  fs.writeFileSync(path.join(dir, '.git', BASE_PIN), 'none\n') // no "auto" suffix: a deliberate opt-out
+  const git = (args) => spawnSync('git', args, { cwd: dir, encoding: 'utf8' })
+  const sha = git(['rev-parse', 'refs/heads/release']).stdout.trim()
+  git(['update-ref', 'refs/remotes/origin/release', sha])
+  git(['symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/release'])
+  assert.equal(
+    runGate(dir).stdout.trim(),
+    '',
+    'a manual none is an explicit opt-out and must not self-heal'
+  )
 })
