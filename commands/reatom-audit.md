@@ -9,7 +9,11 @@ Audit Reatom code in this repository against `${CLAUDE_PLUGIN_ROOT}/skills/reato
 Use `$ARGUMENTS` when given — one or more literal `.ts`/`.tsx` file paths. The router
 does not expand globs or directories; anything else in the list is silently dropped.
 With no arguments, audit the same set the Stop gate would: changed TypeScript across
-`merge-base(HEAD, main)..HEAD` plus the working tree.
+`merge-base(HEAD, <base>)..HEAD` plus the working tree. The gate resolves `<base>`
+itself — `origin/HEAD`, then `main`/`master`/`develop`/`trunk`, then the branch with
+the youngest merge-base against `HEAD` — and pins the answer in
+`.git/reatom-base-branch`. Read that file to see which branch is in use; overwrite it
+to correct a wrong guess, or write `none` to audit the working tree alone.
 
 Unlike the gate, you may be pointed at code that has not changed. That is the
 point of this command: the gate only ever sees the diff, so pre-existing debt is
@@ -25,7 +29,8 @@ node "${CLAUDE_PLUGIN_ROOT}/hooks/route.js" <paths…>
 ```
 
 With no paths, pass the changed set the gate would use: TypeScript across
-`merge-base(HEAD, main)..HEAD` plus the working tree.
+`merge-base(HEAD, <base>)..HEAD` plus the working tree, where `<base>` is the ref
+pinned in `.git/reatom-base-branch`.
 
 Dispatch exactly the auditors the router names, IN PARALLEL, one Agent call each,
 giving each one only the files listed under its own name and the slice it names.
