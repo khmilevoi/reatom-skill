@@ -491,3 +491,25 @@ test('integration: origin/HEAD names the base branch when no conventional name e
   assert.equal(out.decision, 'block')
   assert.match(out.reason, /committed\.ts/)
 })
+
+test('integration: with no origin/HEAD and no conventional name, the commit graph picks the base', () => {
+  const dir = makeRepo({ changed: null, branch: 'release' })
+  commitOnFeatureBranch(dir)
+  const out = JSON.parse(runGate(dir).stdout.trim())
+  assert.equal(out.decision, 'block')
+  assert.match(out.reason, /committed\.ts/)
+})
+
+test('integration: the heuristic does not choose the current branch own remote mirror', () => {
+  const dir = makeRepo({ changed: null, branch: 'release' })
+  const git = (args) => spawnSync('git', args, { cwd: dir, encoding: 'utf8' })
+  commitOnFeatureBranch(dir)
+  // A pushed, up-to-date branch: origin/feature sits on the same commit as
+  // HEAD, so its merge-base is HEAD itself — the newest possible, and it would
+  // win the heuristic and diff the branch against itself, hiding every commit.
+  const sha = git(['rev-parse', 'HEAD']).stdout.trim()
+  git(['update-ref', 'refs/remotes/origin/feature', sha])
+  const out = JSON.parse(runGate(dir).stdout.trim())
+  assert.equal(out.decision, 'block', 'origin/feature must not be treated as the base')
+  assert.match(out.reason, /committed\.ts/)
+})

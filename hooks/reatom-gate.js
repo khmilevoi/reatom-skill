@@ -37,6 +37,41 @@ function isReatomProject(cwd) {
 
 const BASE_CANDIDATES = ['main', 'master', 'develop', 'trunk']
 
+const MAX_HEURISTIC_REFS = 50
+
+// Last resort: whichever other branch HEAD most recently diverged from. The
+// youngest merge-base wins — an older shared ancestor means a more distant
+// relative, not the branch this work forked off.
+function guessBaseRef(cwd) {
+  const listed = git(cwd, ['for-each-ref', '--format=%(refname)', 'refs/heads', 'refs/remotes/origin'])
+  if (listed === null) return null
+
+  const current = (git(cwd, ['symbolic-ref', '-q', 'HEAD']) || '').trim()
+  // A pushed, up-to-date branch shares a zero-distance merge-base with its own
+  // remote-tracking ref, so it would win and diff the branch against itself.
+  const mirror = current ? current.replace('refs/heads/', 'refs/remotes/origin/') : ''
+  const refs = listed
+    .split('\n')
+    .map((s) => s.trim())
+    .filter(Boolean)
+    // refs/remotes/origin/HEAD is a symbolic alias already tried first; keeping
+    // it would double-count whatever branch it points at.
+    .filter((r) => r !== current && r !== mirror && r !== 'refs/remotes/origin/HEAD')
+    .slice(0, MAX_HEURISTIC_REFS)
+
+  let best = null
+  for (const ref of refs) {
+    const mergeBase = git(cwd, ['merge-base', 'HEAD', ref])
+    if (mergeBase === null) continue
+    const stamp = git(cwd, ['log', '-1', '--format=%ct', mergeBase.trim()])
+    if (stamp === null) continue
+    const when = Number(stamp.trim())
+    if (!Number.isFinite(when)) continue
+    if (best === null || when > best.when) best = { ref, when }
+  }
+  return best ? best.ref : null
+}
+
 function refExists(cwd, ref) {
   return git(cwd, ['rev-parse', '--verify', '--quiet', `${ref}^{commit}`]) !== null
 }
@@ -56,7 +91,8 @@ function detectBaseRef(cwd) {
     }
   }
 
-  return { ref: null, guessed: true }
+  const guess = guessBaseRef(cwd)
+  return { ref: guess, guessed: true }
 }
 
 // Committed branch work plus the working tree. `architecture` only looks at
