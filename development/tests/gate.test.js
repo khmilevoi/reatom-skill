@@ -558,3 +558,36 @@ test('integration: a pin that no longer resolves falls back to fresh detection',
     'the stale pin is replaced with what detection found'
   )
 })
+
+test('integration: a guessed base branch warns once and names the pin file', () => {
+  const dir = makeRepo({ changed: null, branch: 'release' })
+  commitOnFeatureBranch(dir)
+  const first = JSON.parse(runGate(dir).stdout.trim())
+  assert.equal(first.decision, 'block', 'the warning rides along with the audit block')
+  assert.match(first.systemMessage, /guessed the base branch as "refs\/heads\/release"/)
+  assert.match(first.systemMessage, /reatom-base-branch/)
+
+  // A further change keeps the gate blocking, so a repeated warning would be
+  // visible rather than hidden behind an allow.
+  fs.writeFileSync(path.join(dir, 'src', 'other.ts'), 'export const q = setInterval(() => {}, 1000)\n')
+  const second = JSON.parse(runGate(dir).stdout.trim())
+  assert.equal(second.decision, 'block')
+  assert.ok(!second.systemMessage, 'the pin silences the repeat warning')
+})
+
+test('integration: an undetectable base branch warns and still allows', () => {
+  // One branch, no remote, nothing else to compare HEAD against.
+  const dir = makeRepo({ changed: null, branch: 'release' })
+  const out = JSON.parse(runGate(dir).stdout.trim())
+  assert.ok(!out.decision, 'there is nothing to audit')
+  assert.match(out.systemMessage, /could not identify a base branch/)
+  assert.match(out.systemMessage, /reatom-base-branch/)
+})
+
+test('integration: a base branch found by name warns about nothing', () => {
+  const dir = makeRepo({ changed: null, branch: 'master' })
+  commitOnFeatureBranch(dir)
+  const out = JSON.parse(runGate(dir).stdout.trim())
+  assert.equal(out.decision, 'block')
+  assert.ok(!out.systemMessage, 'a conventional name is not a guess')
+})

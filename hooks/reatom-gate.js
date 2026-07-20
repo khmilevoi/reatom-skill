@@ -103,6 +103,16 @@ function baseCachePath(cwd) {
   return path.resolve(cwd, gitDir ? gitDir.trim() : '.git', BASE_CACHE_FILE)
 }
 
+function baseWarning(ref, pinFile) {
+  return ref
+    ? `Reatom gate guessed the base branch as "${ref}" from the commit graph — ` +
+      `no origin/HEAD and no ${BASE_CANDIDATES.join('/')} branch was found. ` +
+      `If that is wrong, write the correct ref into ${pinFile} (or ask the agent to).`
+    : `Reatom gate could not identify a base branch, so only working-tree changes ` +
+      `are audited and committed branch work goes unchecked. If this repo has a ` +
+      `base branch, write its ref into ${pinFile} (or ask the agent to).`
+}
+
 // The pin exists so detection runs once and so the operator has somewhere
 // concrete to correct a wrong answer. A pin that stops resolving — the branch
 // was renamed or deleted — is discarded and re-detected rather than trusted.
@@ -118,13 +128,13 @@ function resolveBaseRef(cwd) {
   if (pinned === NO_BASE) return { ref: null, warning: null }
   if (pinned && refExists(cwd, pinned)) return { ref: pinned, warning: null }
 
-  const { ref } = detectBaseRef(cwd)
+  const { ref, guessed } = detectBaseRef(cwd)
   try {
     fs.writeFileSync(pinFile, (ref || NO_BASE) + '\n')
   } catch {
     // fail-open: the pin is only a shortcut, detection already answered
   }
-  return { ref, warning: null }
+  return { ref, warning: guessed ? baseWarning(ref, pinFile) : null }
 }
 
 // Committed branch work plus the working tree. `architecture` only looks at
@@ -181,12 +191,15 @@ function main() {
     plan: null
   }
 
+  let warning = null
+
   if (!ctx.stopHookActive) {
     ctx.isGitRepo = isGitRepo(cwd)
     if (ctx.isGitRepo) {
       ctx.isReatomProject = isReatomProject(cwd)
       if (ctx.isReatomProject) {
         const base = resolveBaseRef(cwd)
+        warning = base.warning
         ctx.auditableFiles = auditableFiles(changedFiles(cwd, base.ref))
         if (ctx.auditableFiles.length > 0) {
           let rules = null
@@ -211,9 +224,16 @@ function main() {
 
   const decision = gateDecision(ctx)
   if (decision.writeCache && decision.cache) writeCache(cwd, decision.cache)
+
+  // systemMessage is orthogonal to decision: the base-branch warning must reach
+  // the operator on runs where there is nothing to block on.
+  const output = {}
   if (decision.block) {
-    process.stdout.write(JSON.stringify({ decision: 'block', reason: decision.reason }) + '\n')
+    output.decision = 'block'
+    output.reason = decision.reason
   }
+  if (warning) output.systemMessage = warning
+  if (Object.keys(output).length > 0) process.stdout.write(JSON.stringify(output) + '\n')
 }
 
 main()
