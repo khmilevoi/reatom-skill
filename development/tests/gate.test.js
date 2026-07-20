@@ -513,3 +513,48 @@ test('integration: the heuristic does not choose the current branch own remote m
   assert.equal(out.decision, 'block', 'origin/feature must not be treated as the base')
   assert.match(out.reason, /committed\.ts/)
 })
+
+const BASE_PIN = 'reatom-base-branch'
+
+test('integration: detection pins the base branch into .git', () => {
+  const dir = makeRepo({ changed: null, branch: 'master' })
+  commitOnFeatureBranch(dir)
+  runGate(dir)
+  const pinned = fs.readFileSync(path.join(dir, '.git', BASE_PIN), 'utf8').trim()
+  assert.equal(pinned, 'refs/heads/master')
+})
+
+test('integration: a "none" pin narrows the audit to the working tree', () => {
+  const dir = makeRepo({ changed: null })
+  commitOnFeatureBranch(dir)
+  fs.writeFileSync(path.join(dir, '.git', BASE_PIN), 'none\n')
+  assert.equal(
+    runGate(dir).stdout.trim(),
+    '',
+    'a none pin drops committed branch work from scope'
+  )
+})
+
+test('integration: a hand-written pin is used instead of detection', () => {
+  const dir = makeRepo({ changed: null, branch: 'master' })
+  commitOnFeatureBranch(dir)
+  // Pin the feature branch itself: merge-base(HEAD, feature) is HEAD, so the
+  // committed diff is empty and nothing reaches an auditor. A detected base
+  // would have found refs/heads/master and blocked.
+  fs.writeFileSync(path.join(dir, '.git', BASE_PIN), 'refs/heads/feature\n')
+  assert.equal(runGate(dir).stdout.trim(), '', 'the pin overrides detection')
+})
+
+test('integration: a pin that no longer resolves falls back to fresh detection', () => {
+  const dir = makeRepo({ changed: null, branch: 'master' })
+  commitOnFeatureBranch(dir)
+  fs.writeFileSync(path.join(dir, '.git', BASE_PIN), 'refs/heads/deleted-branch\n')
+  const out = JSON.parse(runGate(dir).stdout.trim())
+  assert.equal(out.decision, 'block')
+  assert.match(out.reason, /committed\.ts/)
+  assert.equal(
+    fs.readFileSync(path.join(dir, '.git', BASE_PIN), 'utf8').trim(),
+    'refs/heads/master',
+    'the stale pin is replaced with what detection found'
+  )
+})

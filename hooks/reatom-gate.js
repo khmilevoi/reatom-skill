@@ -95,6 +95,38 @@ function detectBaseRef(cwd) {
   return { ref: guess, guessed: true }
 }
 
+const BASE_CACHE_FILE = 'reatom-base-branch'
+const NO_BASE = 'none'
+
+function baseCachePath(cwd) {
+  const gitDir = git(cwd, ['rev-parse', '--git-dir'])
+  return path.resolve(cwd, gitDir ? gitDir.trim() : '.git', BASE_CACHE_FILE)
+}
+
+// The pin exists so detection runs once and so the operator has somewhere
+// concrete to correct a wrong answer. A pin that stops resolving — the branch
+// was renamed or deleted — is discarded and re-detected rather than trusted.
+function resolveBaseRef(cwd) {
+  const pinFile = baseCachePath(cwd)
+  let pinned = null
+  try {
+    pinned = fs.readFileSync(pinFile, 'utf8').trim()
+  } catch {
+    // no pin yet → detect below
+  }
+
+  if (pinned === NO_BASE) return { ref: null, warning: null }
+  if (pinned && refExists(cwd, pinned)) return { ref: pinned, warning: null }
+
+  const { ref } = detectBaseRef(cwd)
+  try {
+    fs.writeFileSync(pinFile, (ref || NO_BASE) + '\n')
+  } catch {
+    // fail-open: the pin is only a shortcut, detection already answered
+  }
+  return { ref, warning: null }
+}
+
 // Committed branch work plus the working tree. `architecture` only looks at
 // uncommitted changes; agents commit mid-session, so that would go blind.
 // A null baseRef means no base branch was found — the working tree is all
@@ -154,7 +186,8 @@ function main() {
     if (ctx.isGitRepo) {
       ctx.isReatomProject = isReatomProject(cwd)
       if (ctx.isReatomProject) {
-        ctx.auditableFiles = auditableFiles(changedFiles(cwd, detectBaseRef(cwd).ref))
+        const base = resolveBaseRef(cwd)
+        ctx.auditableFiles = auditableFiles(changedFiles(cwd, base.ref))
         if (ctx.auditableFiles.length > 0) {
           let rules = null
           try {
