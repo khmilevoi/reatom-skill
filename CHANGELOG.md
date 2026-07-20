@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.3.1
+
+The Stop gate found committed branch work with `git merge-base HEAD main`, a
+literal branch name. On any repo whose default branch isn't `main` — `master`,
+`develop`, `trunk`, anything else — that command failed, `changedFiles`
+silently fell back to the working tree only, and committed work went
+unaudited with no signal that anything was skipped.
+
+### Fixed
+
+- **Base branch is now detected, not assumed.** The gate resolves it through
+  `origin/HEAD` (read locally, never over the network), then the conventional
+  names `main`/`master`/`develop`/`trunk`, then a commit-graph heuristic (the
+  branch HEAD most recently diverged from) as a last resort. An undetectable
+  base branch still fails open to working-tree-only auditing, exactly as
+  before — never a crash, never a block.
+- **The answer is pinned to `.git/reatom-base-branch`** so detection runs
+  once. A value the operator writes by hand is trusted forever — the
+  mechanism for correcting a wrong guess. A value the gate wrote itself is
+  marked internally and gets a cheap recheck on every run, so a base branch
+  that shows up later (someone creates `main`, or configures `origin/HEAD`)
+  is picked up automatically instead of the guess sticking forever.
+- **A guessed or undetectable base branch now surfaces a one-time warning**
+  via the hook's `systemMessage` field, naming the pin file so the operator
+  (or an agent acting for them) knows where to correct it.
+- `commands/reatom-audit.md` documents the detected scope instead of the old
+  hardcoded `merge-base(HEAD, main)`.
+
 ## 0.3.0
 
 Upstream sync to [`reatom/reatom@06a7f7a1`](https://github.com/reatom/reatom/tree/v1001)
