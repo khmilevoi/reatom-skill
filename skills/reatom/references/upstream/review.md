@@ -1,4 +1,4 @@
-<!-- VENDORED reatom/reatom@af2f81f4 (v1001) skills/reatom-review/SKILL.md
+<!-- VENDORED reatom/reatom@06a7f7a1 (v1001) skills/reatom-review/SKILL.md
      DO NOT EDIT. Regenerate: node development/sync-upstream.js -->
 
 

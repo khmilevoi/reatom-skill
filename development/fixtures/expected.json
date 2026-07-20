@@ -5,7 +5,11 @@
     "identity-setter.ts": ["RTM-S01"],
     "manual-debounce.ts": ["RTM-A05"],
     "unwrapped-then.ts": ["RTM-A04", "RTM-A03", "RTM-A06"],
-    "useState-pending.tsx": ["RTM-A02"]
+    "useState-pending.tsx": ["RTM-A02"],
+    "late-await-read.ts": ["RTM-A07"]
   },
-  "clean": ["skills/reatom/references/golden-example.md"]
+  "clean": [
+    "skills/reatom/references/golden-example.md",
+    "development/fixtures/clean/sanctioned-shapes.ts"
+  ]
 }

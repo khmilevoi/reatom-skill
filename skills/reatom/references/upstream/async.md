@@ -1,4 +1,4 @@
-<!-- VENDORED reatom/reatom@af2f81f4 (v1001) skills/reatom-async/REFERENCE.md
+<!-- VENDORED reatom/reatom@06a7f7a1 (v1001) skills/reatom-async/REFERENCE.md
      DO NOT EDIT. Regenerate: node development/sync-upstream.js -->
 
 # Reatom Async Mastery

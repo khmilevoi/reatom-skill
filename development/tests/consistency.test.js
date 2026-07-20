@@ -156,6 +156,45 @@ test("an auditor's description does not claim a rule id or domain label it does 
   }
 })
 
+// The test above checks frontmatter only, and the bodies drifted the same way it
+// was written to prevent: audit-lifecycle announced "RTM-L01…RTM-L02" after
+// RTM-L03 joined its domain, and audit-async announced "…RTM-A06" with A07 and
+// A08 already live. Understating the range is silent — the auditor simply never
+// reports the rules its brief forgot to mention.
+test("an auditor's body cites only its own rules and states its full range", () => {
+  const rules = read('references', 'rules.md')
+  const blocks = rules.split(/^### /m).slice(1)
+  const domainOfId = {}
+  for (const block of blocks) {
+    const id = block.slice(0, block.indexOf(' '))
+    domainOfId[id] = (block.match(/^- domain: (.+)$/m) || [])[1]
+  }
+
+  const foreign = []
+  const staleRanges = []
+  for (const [name, domain] of Object.entries(AUDITORS)) {
+    const brief = fs.readFileSync(path.join(ROOT, 'agents', `${name}.md`), 'utf8')
+    const owned = Object.keys(domainOfId)
+      .filter((id) => domainOfId[id] === domain)
+      .sort()
+    const highest = owned[owned.length - 1]
+
+    for (const id of brief.match(/RTM-[ASLRC]\d{2}/g) || []) {
+      if (domainOfId[id] !== domain) {
+        foreign.push(`${name} cites ${id}, owned by "${domainOfId[id] || 'nothing'}"`)
+      }
+    }
+
+    const range = brief.match(/RTM-[ASLRC]\d{2}\s*(?:…|\.\.\.)\s*(RTM-[ASLRC]\d{2})/)
+    if (range && range[1] !== highest) {
+      staleRanges.push(`${name} announces ${range[1]}, but ${domain} now ends at ${highest}`)
+    }
+  }
+
+  assert.deepEqual(foreign, [], `briefs cite rules they do not own: ${foreign.join(' | ')}`)
+  assert.deepEqual(staleRanges, [], `briefs understate their range: ${staleRanges.join(' | ')}`)
+})
+
 test('the gate dispatches exactly the auditors that exist', () => {
   const { gateDecision, DOMAINS } = require(path.join(ROOT, 'hooks', 'gate-logic'))
   const decision = gateDecision({

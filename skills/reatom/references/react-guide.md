@@ -102,3 +102,90 @@ const balanceState = computed(async () => {
 ```
 
 Early returns make the dependency flow visible, avoid placeholder params, and keep the async chain traceable.
+
+## Event handlers and Reatom context
+
+Event handlers that touch atoms or actions must be wrapped. This is upstream's documented
+requirement, not a style preference — see `@reatom/react`'s README on context preservation.
+
+```tsx
+<button onClick={wrap(() => model.save())}>Save</button>
+<input {...bindField(form.fields.name)} />
+```
+
+An unwrapped handler runs outside the component's frame. Three things follow, and the
+third is the one that produces bug reports:
+
+1. The update loses its causal trace, so logs cannot say what triggered it.
+2. It writes into the global root rather than the component's frame. Under `clearStack()`
+   this is a hard `ReatomError: missing async stack`.
+3. It is **not aborted when the component unmounts**, so an async handler can still resolve
+   and write into a component that is gone.
+
+Handlers from `useAction`, `useWrap` and `bindField` are already frame-bound — do not wrap
+them again.
+
+### Choosing between wrap, bind and onEvent
+
+| Situation | Use |
+| --- | --- |
+| Continuation after `await` or `.then` inside a unit | `wrap(...)` |
+| React event prop | `wrap(...)` in the prop, or `bindField` for inputs |
+| Callback something else will invoke later — `ResizeObserver`, `IntersectionObserver`, a worker `message` | `bind(...)` |
+| DOM listener on a real element | `onEvent(target, type, cb)` |
+
+`wrap` resumes a frame you are already inside. `bind` attaches a frame to a callback that
+will be called from outside one. Reaching for `context.start()` in a callback is a sign you
+wanted `bind`.
+
+## SSR: per-request frame and cache handoff
+
+Atoms stay module-level singletons; their state lives in the frame. That makes the frame
+the unit of request isolation, and getting it wrong leaks one user's data into another
+user's response with no error at all (`RTM-L03`).
+
+```ts
+export const createSsrLoaderData = async (href: string) =>
+  context.start(async () => {
+    urlAtom.sync.set(() => noop)      // RTM-R05 — see below
+    urlAtom.set(new URL(href))
+    await wrap(preloadModel())
+    return { href, snapshot: ssrStorage.snapshotAtom() }
+  })
+```
+
+Three obligations:
+
+1. **Every request enters its own `context.start()`.** Without it the server writes into
+   the process-wide root created at import time, and the next request reads it.
+2. **Neutralise `urlAtom.sync` before setting the URL** (`RTM-R05`). The default sync calls
+   `history.pushState`; on the server that throws `ReferenceError: history is not defined`
+   *inside a timer*, not in the render stack, which makes it very hard to trace.
+3. **Hand the cache over rather than re-fetching.** Pair a memory storage with a persist
+   extension and give it to `withCache({ withPersist })`, serialise the snapshot into the
+   document, then set it on the client inside the new frame before rendering.
+
+**One caveat, stated plainly:** there is no public "wait until all async state settles" API.
+Upstream's own SSR example patches the frame's queue to implement it, copying the helper
+from a core test. Treat it as a helper you must vendor, not as an API to call.
+
+## Provider and clearStack
+
+The `reatomContext.Provider` is optional for a plain SPA — without it components fall back
+to the default root. It is **required** once you call `clearStack()`, and **required** for
+SSR, where the frame carries the request's state.
+
+Upstream's own React examples disagree on this, so decide deliberately rather than copying:
+one wires `clearStack()` plus a provider, another wires neither and runs on the implicit
+global root.
+
+## Do not copy atom placement from the JSX examples
+
+Upstream's `@reatom/jsx` examples create atoms **inside the component body**. That is
+correct there, because a JSX component function runs once and builds a persistent tree.
+
+In React it is a bug: the component body runs on every render, so the atom is recreated
+each time and its state is lost. In React, atoms belong in a module or in a model factory —
+or, when the state is genuinely component-scoped, in `reatomFactoryComponent`, whose init
+function runs once per mount and is aborted on unmount.
+

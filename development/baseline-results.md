@@ -359,3 +359,89 @@ signal.
   harder to skip. One false positive on the clean control.
 - The mechanical fallback for output-contract violations is unbuilt.
 - `golden-example.md` still has no owner in any plan and has now shipped two defects.
+
+---
+
+# Iteration 4
+
+Ran 2026-07-20, after the upstream sync to `reatom/reatom@06a7f7a1` that took the registry
+from 19 to 26 rules. Executor: the shipped `agents/audit-*.md` briefs on their declared
+model, dispatched with the exact per-auditor orders `hooks/route.js` produced.
+
+## The first pass was invalid and is not scored
+
+A full five-auditor run, plus a follow-up re-verify, were discarded. The `reatom:audit-*`
+subagents resolve `${CLAUDE_PLUGIN_ROOT}` to the installed plugin cache
+(`~/.claude/plugins/cache/reatom/reatom/0.2.0`, built from the published GitHub repo), never
+to the working tree. Every auditor therefore read the **old 19-rule registry and the old
+briefs**, and none of this branch's changes were under test.
+
+The failure mode is worth naming because it is actively misleading rather than merely
+useless. `RTM-A07` appeared to be a detection failure — the auditor read the fixture and
+cited it as a *positive* example of correct `wrap` usage — when the rule simply did not
+exist in the slice it read. That misdiagnosis produced two rule rewordings (`RTM-A07`'s and
+`RTM-A05`'s `detect`) made against a phantom. Both survive on their own merits, but neither
+is *proven* necessary: the original wording was never tested against a correct config.
+
+This is the second time this trap has been sprung; iteration 3 lost a run to it the same
+way. A mandatory version-parity precondition is now step 0 of `fixtures/README.md`.
+
+## Violations corpus, valid config
+
+| Auditor | Files routed | Expected ids | Found | False positives |
+| --- | --- | --- | --- | --- |
+| `audit-async` | 6 of 7 | A03, A07, A05, A03, A04, A06, A02 | 7/7 | 0 |
+| `audit-state` | 7 of 7 | S01, S01, S06 | 3/3 | 0 |
+| `audit-lifecycle` | 3 of 7 | L01 | 1/1 | see below |
+| `audit-react` | 1 of 7 | none | sentinel | 0 |
+| `audit-routing-forms` | not dispatched to violations | none | not run | 0 |
+
+**10 of 10 expected rule ids found**, including the new `RTM-A07` at the exact line, with
+the `peek(...)` opt-out named as the alternative.
+
+## Clean control: passed by all five
+
+`clean/sanctioned-shapes.ts` is new in this iteration and is the point of the whole pass.
+It is built entirely from shapes that the pre-sync rules flagged: an `effect` running
+`while (true) { await wrap(sleep(...)) }` inside a `withAbort()` scope, `addEventListener`
+inside a `withObservable` descriptor returning cleanup, a `URLSearchParams` built for an
+outbound request, a `BroadcastChannel` constructed to pass into its own extension, a
+`computed` derived from `ready()`, and a timer touching no unit.
+
+**Zero findings from every auditor.** `audit-lifecycle` went further and cited the fixture
+three times as the positive sibling. The rewritten `RTM-L02` — reframed from "does this use
+`effect`" to "who can abort this" — is confirmed by observation, as are the new exceptions
+on `RTM-R02`, `RTM-R03`, `RTM-A03` and `RTM-A05`.
+
+`golden-example.md`, the older clean control, also produced no findings.
+
+## Two rule-boundary defects found and fixed mid-run
+
+**`RTM-S06` over-fired on four fixtures.** `audit-state` reported it on `manual-debounce`,
+`polling-timer`, `unwrapped-then` and `useState-pending` — every file containing any
+hand-rolled async. Each defect is squarely owned by an async-domain rule, so this was noise
+under the wrong id. First fix ("two or more async units") over-corrected and killed the
+legitimate finding on `enabled-flags.ts`, which has one async unit. The boundary is not a
+unit count but the presence of a **gate**: a flag whose purpose is to decide whether or when
+async work runs. Re-worded to that, and re-verified: S01 ×2 and S06 exactly, nothing else.
+
+**`RTM-A05` and `RTM-L01` overlapped in both directions.** `audit-async` reported A05 on
+`polling-timer` (a recurring timer, which is L01's) and `audit-lifecycle` reported L01 on
+`manual-debounce` (a debounce timer, which is A05's). Reciprocal exceptions added: A05
+defers recurring timers to L01, L01 defers pure debounce timers to A05. **Both sides are
+confirmed by re-run:** `audit-async` no longer reports A05 on `polling-timer`, and
+`audit-lifecycle` no longer reports L01 on `manual-debounce`, while each still reports its
+own expected id and stays silent on the clean control.
+
+## Open after this iteration
+
+- `audit-lifecycle` reports `RTM-L01` on `unwrapped-then.ts`'s `addEventListener`, where
+  `RTM-A06` is the expected id. This one is **genuine dual ownership**, not a false
+  positive: the listener both bypasses `onEvent` (A06) and is never removed (L01). The
+  corpus model of one defect per fixture line does not fit it. Decide whether
+  `expected.json` should record secondary ids rather than contorting either rule.
+- The two rewordings made during the invalid pass (`RTM-A07`, `RTM-A05` `detect`) are
+  unvalidated against their originals. Neither is known to be necessary.
+- `withCache` ordering, `RTM-R05`, `RTM-R06`, `RTM-L03`, `RTM-S07` and `RTM-C02` have **no
+  violation fixture**. They were added on source evidence and are exercised only by the
+  clean control's negative space. The corpus should grow a fixture each.

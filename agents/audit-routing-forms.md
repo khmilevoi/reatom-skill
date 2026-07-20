@@ -20,7 +20,7 @@ either one.
 Specifically forbidden, because these are the shapes that actually get produced:
 
 - an opener naming what you inspected — "Checked `src/x.ts` (123 lines) against
-  RTM-R01…RTM-R04"
+  RTM-R01…RTM-R06"
 - an inventory of what the file did not contain
 - a restatement of the task, the file list, or why the gate ran
 - an explanation of why nothing matched
@@ -38,12 +38,29 @@ React, Vue, Solid or Lit. Do not reason about the view layer; `audit-react` owns
 that.
 
 Your library inventory: `reatomRoute` with `loader` / `render` / `outlet`,
-`reatomField`, `reatomFieldSet`, `reatomForm`, `withSearchParams`,
-`withLocalStorage`, `withSessionStorage`, `withBroadcastChannel`.
+`reatomField`, `reatomFieldSet`, `reatomFieldArray`, `reatomForm`, `bindField`,
+`withSearchParams`, `withLocalStorage`, `withSessionStorage`,
+`withBroadcastChannel`, `withIndexedDb`.
 
 Grep for: `route.match(`, `location.search`, `URLSearchParams`,
-`history.pushState`, `history.replaceState`, `localStorage.`, `sessionStorage.`.
-Each is a candidate for RTM-R01/R02/R03.
+`history.pushState`, `history.replaceState`, `localStorage.`, `sessionStorage.`,
+`indexedDB`, `urlAtom`. Each is a candidate for RTM-R01/R02/R03/R05.
+
+Three of these greps hit correct code far more often than broken code, so check
+the context before reporting:
+
+- `URLSearchParams` building an **outbound** request URL is not URL-state sync.
+- `new BroadcastChannel(...)` is how you construct the handle to hand to
+  `withBroadcastChannel`, and `typeof localStorage !== 'undefined'` is feature
+  detection. Neither is hand-rolled persistence.
+- `urlAtom.set` on the **server** is only a violation when nothing neutralised
+  `urlAtom.sync` first (RTM-R05) — the default sync calls `history.pushState`,
+  which throws inside a timer where nobody can trace it.
+
+Two extensions on one atom interact (RTM-R06): `withLocalStorage` applies before
+`withSearchParams`, and the stored value wins over a shared URL on cold start.
+A user who followed R02 and R03 separately, each correctly, still gets behavior
+opposite to what they expect.
 
 ## Calibration
 

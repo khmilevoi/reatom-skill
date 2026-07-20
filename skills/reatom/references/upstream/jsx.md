@@ -1,4 +1,4 @@
-<!-- VENDORED reatom/reatom@af2f81f4 (v1001) skills/reatom-jsx/REFERENCE.md
+<!-- VENDORED reatom/reatom@06a7f7a1 (v1001) skills/reatom-jsx/REFERENCE.md
      DO NOT EDIT. Regenerate: node development/sync-upstream.js -->
 
 # JSX
@@ -39,8 +39,10 @@ For Vite users:
 
 ```js
 import { defineConfig } from 'vite'
+import { reatom } from '@reatom/vite'
 
 export default defineConfig({
+  plugins: [reatom()],
   esbuild: {
     jsxFactory: 'h',
     jsxFragment: 'hf',
@@ -48,6 +50,8 @@ export default defineConfig({
   },
 })
 ```
+
+`@reatom/vite` also wires routing and `mount()` hot updates — see [Hot module replacement](#hot-module-replacement-vite).
 
 ## Framework compatibility
 
@@ -116,16 +120,21 @@ The `mount` function returns an `unmount` property callback (similar to React's 
 
 ### Hot module replacement (Vite)
 
-During development, the bundler can replace a module without a full reload. The old DOM tree and Reatom subscriptions stay alive unless you tear them down. Call `unmount()` from the previous `mount` inside `import.meta.hot.accept` so the updated module can mount a fresh tree:
+During development, the bundler can replace a module without a full reload. The old DOM tree and Reatom subscriptions stay alive unless you tear them down.
+
+Prefer [`@reatom/vite`](https://www.reatom.dev/reference/vite) — add `reatom()` to your Vite plugins and `mount()` cleanup is injected automatically.
+
+Or handle it manually: call `unmount()` from the previous `mount` inside `import.meta.hot.dispose` so the updated module can mount a fresh tree:
 
 ```tsx
 const root = document.getElementById('app')!
 const { unmount } = mount(root, <App />)
 
 if (import.meta.hot) {
-  import.meta.hot.accept(() => {
+  import.meta.hot.dispose(() => {
     unmount()
   })
+  import.meta.hot.accept()
 }
 ```
 
@@ -947,3 +956,5 @@ These features are not yet supported:
 
 - ❌ DOM-less SSR (you need a DOM-like environment such as [linkedom](https://github.com/WebReflection/linkedom))
 - ❌ React-style keyed reconciliation (use [`reatomLinkedList`](#linked-lists) — node identity is the key; structural updates are incremental)
+
+Lifecycle tracking is scoped to the `mount` target: subscriptions are cleaned up when nodes are removed _inside_ the mounted tree or when you call the returned `unmount()`. Removing the mount target's ancestors directly (outside of the mounted tree) is not observed and leaks active subscriptions — you own the mount node and must call `unmount()` before detaching it.

@@ -78,13 +78,17 @@ export const search = atom('', 'users.search')
 export const page = atom(1, 'users.page')
 
 export const usersResource = computed(async () => {
+  // Every reactive input is read here, before the first await: dependency
+  // tracking does not extend past it, so `page()` read below would silently
+  // never become a dependency and paging would not refetch. (RTM-A07)
   const query = search()
+  const currentPage = page()
 
   await wrap(sleep(250))
 
   if (!query) return []
 
-  const response = await wrap(api.searchUsers({ query, page: page() }))
+  const response = await wrap(api.searchUsers({ query, page: currentPage }))
 
   return response.items.map((user) => reatomUser(user, `users#${user.id}`))
 }, 'users.resource').extend(withAsyncData({ initState: [] as Array<UserModel> }))

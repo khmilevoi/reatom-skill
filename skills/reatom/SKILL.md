@@ -59,17 +59,23 @@ prefer those when the example's prose and the handbook disagree.
 
 - Query/read data: use `computed(async () => ...).extend(withAsyncData(...))`. (RTM-A01)
 - Mutations/commands: use `action(async () => ...).extend(withAsync(...))`. (RTM-A02, RTM-A03)
-- Async boundaries: use `wrap(...)` for promises and callbacks that touch Reatom. (RTM-A04, RTM-A06)
+- Async boundaries: use `wrap(...)` for promises and callbacks that touch Reatom, and `bind(...)` for callbacks invoked later from outside. (RTM-A04, RTM-A06)
 - Debounce: `await wrap(sleep(ms))` inside an async action, not timers. (RTM-A05)
+- Async dependencies: read every reactive input before the first `await`; a read after it never becomes a dependency. (RTM-A07)
+- Async caching: `withCache(...)` for TTL, LRU and stale-while-revalidate. (RTM-A08)
 - Local state updates: prefer direct `atom.set(...)`; avoid identity setter actions. (RTM-S01)
 - Writable dependent state: use `withComputed(...)` instead of React `key` resets or sync effects. (RTM-S02)
 - Editable nested data: atomize mutable fields and keep readonly fields plain. (RTM-S03)
 - Grouped UI transitions: expose a named model action rather than several sets in a handler. (RTM-S04)
-- Long-lived side effects: own timers, listeners and subscriptions with `withConnectHook(...)` returning a cleanup. (RTM-L01, RTM-L02)
+- Editable collections: derive them with `computed` plus a model cache keyed by id; reserve `reatomLinkedList` for collections you own and mutate. (RTM-S07)
+- Long-lived side effects: give every effect a lifetime owner that returns cleanup — `withConnectHook(...)`, `reatomObservable`, or an abortable enclosing scope. A bare module-level `effect` owning a resource never stops. (RTM-L01, RTM-L02)
+- SSR: run each request inside its own `context.start()`, and neutralise `urlAtom.sync` before setting the URL on the server. (RTM-L03, RTM-R05)
 - Routes: use `reatomRoute` loaders and `render`; avoid manual `route.match()` component branching. (RTM-R01)
-- URL filters and preferences: use `withSearchParams` and persistence extensions. (RTM-R02, RTM-R03)
-- Forms: use `reatomField`, `reatomFieldSet`, and `reatomForm`. (RTM-R04)
+- URL filters and preferences: use `withSearchParams` and persistence extensions; when both apply to one atom, order them deliberately. (RTM-R02, RTM-R03, RTM-R06)
+- Forms: use `reatomField`, `reatomFieldSet`, `reatomFieldArray`, and `reatomForm` with a schema. (RTM-R04)
 - React reads: read atoms lazily, after early-return guards. (RTM-C01)
+- React handlers: wrap event handlers that touch Reatom. (RTM-C02)
+- Vite dev setup: add `reatom()` from `@reatom/vite` to `plugins`; manual HMR uses `hot.dispose`, not `hot.accept(cb)`.
 - Orchestration: collapse coordinated async into one `computed(async)`. (RTM-S06)
 - Naming: name every atom, computed, action, and route. (RTM-S05)
 
@@ -83,7 +89,11 @@ prefer those when the example's prose and the handbook disagree.
 | Dependent writable state | `withComputed` | `useEffect` sync/reset |
 | Route page data | Route `loader`/`render` | `route.match()` component branch |
 | Editable row state | Atomized item model | Parallel UI-state maps |
+| Derived collection | `computed` + model cache by id | Mutable list synced by `subscribe` fan-out |
 | Async callback | `wrap` or `onEvent` | Raw `.then`/event callbacks touching atoms |
+| External callback | `bind(...)` | `context.start(...)` inside the callback |
+| Cached query | `withCache({ staleTime, swr })` | Hand-rolled `Map` + `Date.now()` TTL |
+| SSR request state | Per-request `context.start()` | Module-level root shared across requests |
 
 ## Do Not Recommend
 
@@ -93,7 +103,12 @@ prefer those when the example's prose and the handbook disagree.
 - Free-standing setter helpers that only forward values into an atom.
 - Manual route rendering branches such as `if (!route.match()) return null`.
 - Unwrapped async continuations that touch atoms or actions after `await`, `.then`, events, or timers.
+- Unwrapped React event handlers that read or write atoms.
 - Normalized backend data plus separate UI-state maps when atomized item models fit.
+- Hand-rolled request caches — `Map` memos, `Date.now()` TTLs, bespoke revalidation — when `withCache` fits.
+- Atoms created inside a React component body. Upstream's `@reatom/jsx` examples do this legitimately; in React the body reruns and the atom is rebuilt every render.
+- Server rendering that touches atoms outside a per-request `context.start()`.
+- Manual `.subscribe(cb, errorCb)` wiring for error UI — read `.error()` from `withAsyncData` instead.
 
 ## Reference Map
 
@@ -106,8 +121,19 @@ prefer those when the example's prose and the handbook disagree.
 - `references/react-guide.md`
   - `React-to-Reatom decision guide`
   - `Before/after: enabled flags and async queries`
+  - `Event handlers and Reatom context`
+  - `Choosing between wrap, bind and onEvent`
+  - `SSR: per-request frame and cache handoff`
+  - `Provider and clearStack`
+  - `Do not copy atom placement from the JSX examples`
+- `references/async-notes.md`
+  - `Caching async reads`
+  - `Where the async context is lost`
+  - `Dependency tracking stops at the first await`
 - `references/atomization-notes.md`
   - `Atomization notes`
+  - `Collections of models`
+  - `Connection lifetime owns the async cache`
 - `references/golden-example.md`
   - One source-backed React/Reatom example combining the main default patterns
 - `references/upstream/core.md`
@@ -180,4 +206,9 @@ Read the installed package for:
 - Did route code use loaders/render/outlet for route-scoped lifetime?
 - Did dynamic editable structures use atomization instead of parallel state maps?
 - Did `reatomComponent` read atoms lazily — after early-return guards, not before them?
+- Did every React event handler touching Reatom go through `wrap` or an adapter binding?
+- Did `computed(async)` bodies read their reactive inputs before the first `await`?
+- Did derived collections reuse model instances through a keyed cache instead of rebuilding them?
+- Did every long-lived effect have an owner that returns cleanup, rather than a bare module-level `effect`?
+- Did server-side code enter a per-request `context.start()` before touching atoms?
 - Did the answer cite the reference section used when giving non-obvious advice?

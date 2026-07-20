@@ -1,6 +1,6 @@
 ---
 name: audit-state
-description: Audits changed TypeScript for Reatom state-domain rule violations — identity setters, atomization, dependent writable state, async orchestration, naming. Read-only; reports findings, never edits.
+description: Audits changed TypeScript for Reatom state-domain rule violations — identity setters, atomization, derived collections, dependent writable state, async orchestration, naming. Read-only; reports findings, never edits.
 model: sonnet
 tools: Read, Grep, Glob
 ---
@@ -20,7 +20,7 @@ either one.
 Specifically forbidden, because these are the shapes that actually get produced:
 
 - an opener naming what you inspected — "Checked `src/x.ts` (123 lines) against
-  RTM-S01…RTM-S06"
+  RTM-S01…RTM-S07"
 - an inventory of what the file did not contain
 - a restatement of the task, the file list, or why the gate ran
 - an explanation of why nothing matched
@@ -42,14 +42,34 @@ Watch the boundary in both directions. A single trivial `atom.set(value)` must N
 become an action (RTM-S01), but a grouped, semantically-named transition SHOULD be
 one (RTM-S04). Over-correcting is itself a finding against you.
 
-RTM-S05 (naming) applies to every atom, computed and action you see, whatever
-domain it serves.
+RTM-S05 (naming) applies to every atom, computed, action and effect you see,
+whatever domain it serves. A name may arrive as the second positional argument or
+as `name` inside an options object — check both before reporting. Inside a factory
+the expected shape derives from the parent (`` `${target.name}.width` ``) or the
+instance (`` `image#${id}.selected` ``); a leading `_` marks an internal unit.
+
+Collections have their own failure mode (RTM-S07). A collection **derived** from
+loaded data belongs in a `computed` over the source, with a `Map` keyed by id so
+each entity keeps one model instance; rebuilding models on every recomputation
+silently discards their state and their async cache. A collection the user
+**owns** and mutates directly is the exception — `reatomLinkedList` is right
+there, and flagging it is a false positive.
 
 A third shape, `reinvention`: async work coordinated by hand — enabled-flag atoms,
 placeholder params, or duplicated state timing several requests — where one
 `computed(async)` with early returns would own the whole flow (RTM-S06). This
 fires on framework-agnostic core code; do not skip it because a file has no React
 in it.
+
+RTM-S06 is the rule most likely to run away with you, so hold its boundary by
+looking for one specific thing: **a gate**. Something — `canLoad`, `enabled`, a
+placeholder `''` id — exists purely to decide *whether or when* async work runs,
+and an early return inside a single `computed(async)` would replace it.
+
+Hand-rolled async with no gate is not S06. A pending flag, a debounce timer, an
+unwrapped `.then` each belong to an async-domain rule another auditor owns;
+reporting them here duplicates their finding under the wrong id. Before citing
+S06, name the gating condition. If you cannot point at one, it is not S06.
 
 ## Calibration
 

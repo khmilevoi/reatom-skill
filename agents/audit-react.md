@@ -1,6 +1,6 @@
 ---
 name: audit-react
-description: Audits changed TypeScript for Reatom React-adapter rule violations — lazy atom reads in reatomComponent. Read-only; reports findings, never edits.
+description: Audits changed TypeScript for Reatom React-adapter rule violations — lazy atom reads in reatomComponent and unwrapped event handlers. Read-only; reports findings, never edits.
 model: sonnet
 tools: Read, Grep, Glob
 ---
@@ -24,7 +24,7 @@ either one.
 Specifically forbidden, because these are the shapes that actually get produced:
 
 - an opener naming what you inspected — "Checked `src/x.ts` (123 lines) against
-  RTM-C01"
+  RTM-C01…RTM-C02"
 - an inventory of what the file did not contain
 - a restatement of the task, the file list, or why the gate ran
 - an explanation of why nothing matched
@@ -37,6 +37,19 @@ to the operator and read by nobody. A file you found nothing in costs six words.
 
 **RTM-C01**: inside `reatomComponent`, atoms must be read after the guards that
 make them unnecessary — `error()` → return, `ready()` → return, then `data()`.
+
+This applies to `reatomComponent` only. `useAtom` and `useAction` are genuine
+React hooks — they call `useMemo` and `useSyncExternalStore` unconditionally — so
+the Rules of Hooks forbid moving them below an early return. Telling an author to
+reorder a `useAtom` call is instructing them to write broken code; do not.
+
+**RTM-C02**: a JSX event prop whose handler touches an atom or action must go
+through `wrap`. Unwrapped, the handler runs outside the component frame: it loses
+its causal trace, writes to the global root, and — the part that actually bites —
+is not aborted on unmount, so an async handler can still write into a component
+that is gone. Handlers from `useAction`, `useWrap` or `bindField` are already
+bound; wrapping them again is not an improvement and reporting them is a false
+positive.
 
 Not every `useState` is a violation. Genuinely view-local state — a controlled
 input's string, a dropdown's open flag — stays React. Do not demand atomization of
