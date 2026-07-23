@@ -636,3 +636,27 @@ test('integration: a manually-written "none" pin stays sticky even after origin/
     'a manual none is an explicit opt-out and must not self-heal'
   )
 })
+
+const { readIgnorePatterns } = require('../../hooks/gate-logic')
+
+test('readIgnorePatterns keeps patterns and drops comments and blanks', () => {
+  const raw = [
+    '# fixtures the scanner reads as data',
+    '',
+    'src/fixtures/',
+    '  *.gen.ts  ',
+    '   ',
+    'tools/lexer.ts'
+  ].join('\n')
+  assert.deepEqual(readIgnorePatterns(raw), ['src/fixtures/', '*.gen.ts', 'tools/lexer.ts'])
+})
+
+test('readIgnorePatterns treats a missing file as no patterns', () => {
+  assert.deepEqual(readIgnorePatterns(null), [])
+  assert.deepEqual(readIgnorePatterns(undefined), [])
+  assert.deepEqual(readIgnorePatterns(''), [])
+})
+
+test('readIgnorePatterns splits CRLF input cleanly', () => {
+  assert.deepEqual(readIgnorePatterns('a.ts\r\nb.ts\r\n'), ['a.ts', 'b.ts'])
+})

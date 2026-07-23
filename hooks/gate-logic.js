@@ -131,6 +131,14 @@ function parseCache(raw) {
   }
 }
 
+function readIgnorePatterns(raw) {
+  if (typeof raw !== 'string') return []
+  return raw
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line && !line.startsWith('#'))
+}
+
 function planAudit({ files, readFile, readSlice, cache, triggers }) {
   const slices = Object.fromEntries(DOMAINS.map((d) => [d, safeRead(() => readSlice(d), '')]))
   const assignments = {}
@@ -193,5 +201,6 @@ module.exports = {
   pairKey,
   pairHash,
   parseCache,
+  readIgnorePatterns,
   planAudit
 }
