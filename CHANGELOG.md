@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.4.0
+
+The gate routed every changed file to auditors no matter who changed it or
+what the file was. A session that only answered questions still got blocked
+on working-tree changes made outside it, and paths that are not audit
+surface at all — test fixtures, scanner code that treats Reatom tokens as
+data — were re-routed on every content change with no way to exclude them.
+
+### Added
+
+- **`.reatom-gate-ignore`** — a gitignore-style file at the project root
+  (one glob per line, `#` comments, a missing file is a no-op) whose matches
+  the Stop gate drops before routing. Supports `*` and `?` within a segment,
+  `**` across segments, root-anchoring by any slash, and a trailing `/` for
+  everything under a directory; negation is deliberately unsupported. The
+  file is operator-maintained — the plugin never writes to it. `/reatom-audit`
+  deliberately does not apply it: an explicit manual invocation must still
+  reach ignored paths.
+- **Session-context triage in the block reason.** Before dispatching, the
+  receiving session now judges each listed file from its conversation
+  context alone — without inspecting the files — and skips the ones it did
+  not change, reporting every skip to the operator with the available
+  follow-ups (`/reatom-audit <paths>`, or an ignore entry). Unsure fails
+  toward auditing. This is a text-only change: the hook's
+  `{decision, reason}` contract and caching are unchanged — which also
+  means a skip is final until the file's content changes again, and the
+  mandatory operator note is the safety valve.
+
 ## 0.3.1
 
 The Stop gate found committed branch work with `git merge-base HEAD main`, a
