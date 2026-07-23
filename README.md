@@ -28,6 +28,20 @@ The gate is incremental: it caches which file/domain pairs it has already audite
 which rule slice, and skips a pair once its cache entry matches. A Stop can pass with no
 auditor dispatched at all when everything routed has already been audited.
 
+Two escape hatches keep the gate honest about scope. A `.reatom-gate-ignore`
+file at the project root — gitignore-style globs, `#` comments, no negation —
+permanently excludes paths that are not audit surface, such as test fixtures
+or scanner code that treats Reatom tokens as data. It is yours to maintain:
+the plugin never writes to it, and `/reatom-audit` deliberately does not
+apply it, so a manual audit still reaches excluded paths. Separately, the
+block reason opens with a triage step: the session judges, from its own
+conversation context and without inspecting files, whether it actually made
+the listed changes. Changes made outside the session are skipped rather than
+audited — the gate only sees the git diff, so a consultation-only session
+would otherwise be blocked on someone else's work — and every skip is
+reported to the operator along with the follow-ups (`/reatom-audit <paths>`,
+or an ignore entry).
+
 Non-Reatom projects and sessions with no TypeScript change exit silently.
 
 Run it by hand against any path with `/reatom-audit [path]`. The gate only ever sees the
