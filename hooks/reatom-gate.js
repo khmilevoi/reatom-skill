@@ -1,7 +1,7 @@
 const fs = require('node:fs')
 const path = require('node:path')
 const { spawnSync } = require('node:child_process')
-const { auditableFiles, gateDecision, parseCache, planAudit, buildTriggers } = require('./gate-logic')
+const { auditableFiles, gateDecision, parseCache, planAudit, buildTriggers, readIgnorePatterns, filterIgnored } = require('./gate-logic')
 
 function readStdin() {
   try {
@@ -244,7 +244,16 @@ function main() {
       if (ctx.isReatomProject) {
         const base = resolveBaseRef(cwd)
         warning = base.warning
-        ctx.auditableFiles = auditableFiles(changedFiles(cwd, base.ref))
+        let ignoreRaw = null
+        try {
+          ignoreRaw = fs.readFileSync(path.join(cwd, '.reatom-gate-ignore'), 'utf8')
+        } catch {
+          // no ignore file (or unreadable) → nothing is excluded
+        }
+        ctx.auditableFiles = filterIgnored(
+          auditableFiles(changedFiles(cwd, base.ref)),
+          readIgnorePatterns(ignoreRaw)
+        )
         if (ctx.auditableFiles.length > 0) {
           let rules = null
           try {

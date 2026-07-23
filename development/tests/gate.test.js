@@ -707,3 +707,20 @@ test('a dot in a pattern is literal, not a regex wildcard', () => {
   const files = ['src/api.gen.ts', 'src/apixgenxts.ts']
   assert.deepEqual(filterIgnored(files, ['*.gen.ts']), ['src/apixgenxts.ts'])
 })
+
+test('integration: .reatom-gate-ignore drops a matching file from the gate', () => {
+  const dir = makeRepo()
+  fs.writeFileSync(
+    path.join(dir, '.reatom-gate-ignore'),
+    '# scanner fixtures, not audit surface\nsrc/model.ts\n'
+  )
+  assert.equal(runGate(dir).stdout.trim(), '', 'the ignored file must not block the gate')
+})
+
+test('integration: a non-matching ignore file leaves the gate blocking', () => {
+  const dir = makeRepo()
+  fs.writeFileSync(path.join(dir, '.reatom-gate-ignore'), 'tools/\n*.gen.ts\n')
+  const out = JSON.parse(runGate(dir).stdout.trim())
+  assert.equal(out.decision, 'block')
+  assert.match(out.reason, /src[\\/]model\.ts/)
+})
