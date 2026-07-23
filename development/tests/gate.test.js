@@ -755,3 +755,15 @@ test('the block reason opens with session-context triage before the dispatch ord
   assert.match(reason, /\.reatom-gate-ignore/)
   assert.match(reason, /report the skip to the operator/)
 })
+
+test('a trailing double star ignores everything under the directory', () => {
+  assert.deepEqual(filterIgnored(['src/a.ts', 'src.ts'], ['src/**']), ['src.ts'])
+})
+
+test('a lone double star ignores everything', () => {
+  assert.deepEqual(filterIgnored(['src/a.ts', 'b.ts'], ['**']), [])
+})
+
+test('a bare slash pattern matches nothing', () => {
+  assert.deepEqual(filterIgnored(['src/a.ts', 'a.ts'], ['/']), ['src/a.ts', 'a.ts'])
+})
