@@ -740,3 +740,18 @@ test('route.js ignores .reatom-gate-ignore in cwd — /reatom-audit must reach i
     'the manual router must not apply the gate ignore file'
   )
 })
+
+test('the block reason opens with session-context triage before the dispatch orders', () => {
+  const { reason } = gateDecision(base)
+  const triage = reason.indexOf('TRIAGE FIRST')
+  const orders = reason.indexOf('Dispatch these auditors')
+  assert.ok(triage !== -1, 'the triage protocol is present')
+  assert.ok(orders !== -1, 'the dispatch orders are still present')
+  assert.ok(triage < orders, 'triage comes before the dispatch orders')
+  assert.match(reason, /do not open or inspect the files/)
+  assert.match(reason, /did this session change it/)
+  assert.match(reason, /unsure, audit/)
+  assert.match(reason, /\/reatom-audit/)
+  assert.match(reason, /\.reatom-gate-ignore/)
+  assert.match(reason, /report the skip to the operator/)
+})
