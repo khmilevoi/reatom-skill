@@ -139,6 +139,58 @@ function readIgnorePatterns(raw) {
     .filter((line) => line && !line.startsWith('#'))
 }
 
+// A hand-written subset of gitignore matching (the repo has no dependencies):
+// '*' and '?' stay inside one path segment, '**' crosses segments, any slash
+// anchors the pattern to the project root, a trailing slash means everything
+// under that directory, and a slashless pattern matches any single segment at
+// any depth. Negation is deliberately unsupported.
+function compilePattern(pattern) {
+  let p = pattern
+  let dirOnly = false
+  if (p.endsWith('/')) {
+    dirOnly = true
+    p = p.slice(0, -1)
+  }
+  let anchored = false
+  if (p.startsWith('/')) {
+    anchored = true
+    p = p.slice(1)
+  }
+  if (p.includes('/')) anchored = true
+
+  // '\u0001' cannot appear in a path; it marks '**' segments so the glob
+  // translation below cannot confuse them with characters the segment
+  // translation already escaped. Order matters: '**/' first (zero or more
+  // whole segments), then a trailing '/**' (everything under), then '**'
+  // standing alone.
+  const body = p
+    .split('/')
+    .map((seg) =>
+      seg === '**'
+        ? '\u0001'
+        : seg
+            .replace(/[.+^${}()|[\]\\]/g, '\\$&')
+            .replace(/\*/g, '[^/]*')
+            .replace(/\?/g, '[^/]')
+    )
+    .join('/')
+    .split('\u0001/').join('(?:[^/]+/)*')
+    .split('/\u0001').join('/.*')
+    .split('\u0001').join('.*')
+
+  const head = anchored ? '^' : '(?:^|/)'
+  // A match on a directory segment must also drop everything under it, so a
+  // non-dirOnly pattern accepts either end-of-path or a following slash.
+  const tail = dirOnly ? '/' : '(?:/|$)'
+  return new RegExp(`${head}(?:${body})${tail}`)
+}
+
+function filterIgnored(files, patterns) {
+  if (!patterns || patterns.length === 0) return files
+  const compiled = patterns.map(compilePattern)
+  return files.filter((f) => !compiled.some((re) => re.test(f)))
+}
+
 function planAudit({ files, readFile, readSlice, cache, triggers }) {
   const slices = Object.fromEntries(DOMAINS.map((d) => [d, safeRead(() => readSlice(d), '')]))
   const assignments = {}
@@ -202,5 +254,7 @@ module.exports = {
   pairHash,
   parseCache,
   readIgnorePatterns,
+  filterIgnored,
   planAudit
 }
+

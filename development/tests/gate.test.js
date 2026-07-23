@@ -660,3 +660,50 @@ test('readIgnorePatterns treats a missing file as no patterns', () => {
 test('readIgnorePatterns splits CRLF input cleanly', () => {
   assert.deepEqual(readIgnorePatterns('a.ts\r\nb.ts\r\n'), ['a.ts', 'b.ts'])
 })
+
+const { filterIgnored } = require('../../hooks/gate-logic')
+
+test('filterIgnored with no patterns returns the list untouched', () => {
+  const files = ['src/a.ts', 'src/b.tsx']
+  assert.deepEqual(filterIgnored(files, []), files)
+})
+
+test('a pattern with a slash anchors to the project root', () => {
+  const files = ['src/gen/api.ts', 'apps/web/src/gen/api.ts']
+  assert.deepEqual(filterIgnored(files, ['src/gen/api.ts']), ['apps/web/src/gen/api.ts'])
+})
+
+test('a leading slash anchors the same way', () => {
+  const files = ['src/gen/api.ts', 'apps/web/src/gen/api.ts']
+  assert.deepEqual(filterIgnored(files, ['/src/gen/api.ts']), ['apps/web/src/gen/api.ts'])
+})
+
+test('a slashless pattern matches any path segment at any depth', () => {
+  const files = ['src/fixtures/case.ts', 'fixtures/case.ts', 'src/real/model.ts', 'src/fixtures.ts']
+  assert.deepEqual(filterIgnored(files, ['fixtures']), ['src/real/model.ts', 'src/fixtures.ts'])
+})
+
+test('a star does not cross a slash', () => {
+  const files = ['src/a.gen.ts', 'src/deep/b.gen.ts']
+  assert.deepEqual(filterIgnored(files, ['src/*.ts']), ['src/deep/b.gen.ts'])
+})
+
+test('a double star crosses directories', () => {
+  const files = ['src/a.test.ts', 'src/deep/er/b.test.ts', 'src/model.ts']
+  assert.deepEqual(filterIgnored(files, ['src/**/*.test.ts']), ['src/model.ts'])
+})
+
+test('a question mark matches exactly one character within a segment', () => {
+  const files = ['src/a1.ts', 'src/a12.ts']
+  assert.deepEqual(filterIgnored(files, ['src/a?.ts']), ['src/a12.ts'])
+})
+
+test('a trailing slash ignores everything under the directory, at any depth', () => {
+  const files = ['tools/scanner/lexer.ts', 'tools.ts', 'src/tools/x.ts']
+  assert.deepEqual(filterIgnored(files, ['tools/']), ['tools.ts'])
+})
+
+test('a dot in a pattern is literal, not a regex wildcard', () => {
+  const files = ['src/api.gen.ts', 'src/apixgenxts.ts']
+  assert.deepEqual(filterIgnored(files, ['*.gen.ts']), ['src/apixgenxts.ts'])
+})
