@@ -724,3 +724,19 @@ test('integration: a non-matching ignore file leaves the gate blocking', () => {
   assert.equal(out.decision, 'block')
   assert.match(out.reason, /src[\\/]model\.ts/)
 })
+
+const ROUTE = path.join(__dirname, '..', '..', 'hooks', 'route.js')
+
+test('route.js ignores .reatom-gate-ignore in cwd — /reatom-audit must reach ignored paths', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'reatom-route-'))
+  fs.mkdirSync(path.join(dir, 'src'))
+  fs.writeFileSync(path.join(dir, 'src', 'model.ts'), 'export const x = setInterval(() => {}, 1000)\n')
+  fs.writeFileSync(path.join(dir, '.reatom-gate-ignore'), 'src/model.ts\n')
+  const result = spawnSync('node', [ROUTE, 'src/model.ts'], { cwd: dir, encoding: 'utf8' })
+  assert.match(result.stdout, /audit-lifecycle/)
+  assert.match(result.stdout, /src\/model\.ts/)
+  assert.ok(
+    !result.stdout.includes('No auditable TypeScript'),
+    'the manual router must not apply the gate ignore file'
+  )
+})

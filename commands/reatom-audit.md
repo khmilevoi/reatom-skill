@@ -19,6 +19,10 @@ Unlike the gate, you may be pointed at code that has not changed. That is the
 point of this command: the gate only ever sees the diff, so pre-existing debt is
 invisible to it.
 
+`.reatom-gate-ignore` is not applied here either. The gate drops those paths;
+this command exists to audit code the gate skips, so an explicit manual
+invocation still reaches them.
+
 ## Run
 
 Get the dispatch orders first — the router decides which auditors can fire on
