@@ -785,7 +785,8 @@ function transcriptOf(...toolNames) {
 test('sessionMutated proves a read-only session clean', () => {
   const readOnly = [
     'Read', 'Grep', 'Glob', 'WebSearch', 'WebFetch', 'TodoWrite',
-    'AskUserQuestion', 'ToolSearch', 'EnterPlanMode', 'ExitPlanMode'
+    'AskUserQuestion', 'ToolSearch', 'EnterPlanMode', 'ExitPlanMode',
+    'TaskCreate', 'TaskGet', 'TaskList', 'TaskOutput', 'TaskStop', 'TaskUpdate'
   ]
   assert.equal(sessionMutated(transcriptOf(...readOnly)), false)
 })
@@ -819,6 +820,14 @@ test('sessionMutated scans sidechain entries like any other', () => {
     message: { content: [{ type: 'tool_use', name: 'Edit', input: {} }] }
   })
   assert.equal(sessionMutated(transcriptOf('Read') + '\n' + side), true)
+})
+
+test('sessionMutated fails closed on a transcript with no recognizable entries', () => {
+  const lines = [
+    JSON.stringify({ type: 'summary', summary: 'compacted' }),
+    JSON.stringify({ type: 'assistant', message: { content: 'a bare string, not blocks' } })
+  ].join('\n')
+  assert.equal(sessionMutated(lines), true)
 })
 
 test('gateDecision converts a block into a consultation skip for a read-only session', () => {
@@ -890,4 +899,17 @@ test('integration: a missing transcript file fails closed to a block', () => {
   const dir = makeRepo()
   const out = JSON.parse(runGate(dir, false, path.join(dir, 'no-such-transcript.jsonl')).stdout.trim())
   assert.equal(out.decision, 'block')
+})
+
+test('integration: the base-branch warning and the skip message share one systemMessage', () => {
+  const dir = makeRepo({ branch: 'release' })
+  const out = JSON.parse(runGate(dir, false, writeTranscript(['Read'])).stdout.trim())
+  assert.equal(out.decision, undefined, 'read-only session still skips')
+  assert.match(out.systemMessage, /could not identify a base branch/)
+  assert.match(out.systemMessage, /left unaudited/)
+  assert.ok(
+    out.systemMessage.indexOf('could not identify') < out.systemMessage.indexOf('left unaudited'),
+    'warning first, then the skip line, newline-joined'
+  )
+  assert.match(out.systemMessage, /\n/)
 })

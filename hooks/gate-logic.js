@@ -175,15 +175,19 @@ function parseCache(raw) {
 
 const READ_ONLY_TOOLS = new Set([
   'Read', 'Grep', 'Glob', 'WebSearch', 'WebFetch', 'TodoWrite',
-  'AskUserQuestion', 'ToolSearch', 'EnterPlanMode', 'ExitPlanMode'
+  'AskUserQuestion', 'ToolSearch', 'EnterPlanMode', 'ExitPlanMode',
+  'TaskCreate', 'TaskGet', 'TaskList', 'TaskOutput', 'TaskStop', 'TaskUpdate'
 ])
 
 // A negative proof, not attribution: the question is never "which files did
 // the session change" but "could it have changed anything at all". Anything
 // not provably read-only — Bash, Task, Skill, MCP tools, unknown names, a
-// line that does not parse — flips the answer to yes.
+// line that does not parse — flips the answer to yes. A transcript with no
+// recognizable entries at all — nothing shaped like a message with content
+// blocks — also proves nothing and reads as mutated.
 function sessionMutated(raw) {
   if (typeof raw !== 'string' || raw.trim() === '') return true
+  let recognized = false
   for (const line of raw.split('\n')) {
     if (!line.trim()) continue
     let entry
@@ -194,11 +198,12 @@ function sessionMutated(raw) {
     }
     const content = entry && entry.message && entry.message.content
     if (!Array.isArray(content)) continue
+    recognized = true
     for (const block of content) {
       if (block && block.type === 'tool_use' && !READ_ONLY_TOOLS.has(block.name)) return true
     }
   }
-  return false
+  return !recognized
 }
 
 function readIgnorePatterns(raw) {

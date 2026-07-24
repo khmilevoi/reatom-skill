@@ -15,14 +15,15 @@ one party who knows.
 - **Consultation-session skip.** Before blocking, the Stop gate scans the
   session transcript (`transcript_path`) against an allowlist of provably
   read-only tools (Read, Grep, Glob, WebSearch, WebFetch, TodoWrite,
-  AskUserQuestion, ToolSearch, EnterPlanMode, ExitPlanMode). If the session
-  never invoked anything else, the diff cannot be its work: the gate allows
+  AskUserQuestion, ToolSearch, EnterPlanMode, ExitPlanMode, TaskCreate,
+  TaskGet, TaskList, TaskOutput, TaskStop, TaskUpdate). If the session never
+  invoked anything else, the diff cannot be its work: the gate allows
   silently, leaves the cache untouched — the changes resurface at the next
   Stop of a session that did mutate something — and tells the operator in a
   one-line systemMessage which files were left unaudited. Everything is
   fail-closed: Bash, Task, Skill, MCP tools, unknown names, a malformed
-  transcript line, or a missing transcript all count as mutating and keep
-  the blocking behavior.
+  transcript line, a transcript with no recognizable entries, or a missing
+  transcript all count as mutating and keep the blocking behavior.
 - **Confidence triage in the block reason.** The triage protocol now has
   three outcomes instead of two: changed by this session → audit; certainly
   not changed → skip and report (unchanged from 0.4.0); genuinely unsure →
