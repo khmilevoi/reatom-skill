@@ -4,7 +4,7 @@ const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
 const { spawnSync } = require('node:child_process')
-const { auditableFiles, gateDecision, DOMAINS, sessionMutated } = require('../../hooks/gate-logic')
+const { auditableFiles, gateDecision, DOMAINS, sessionMutated, buildSkipMessage } = require('../../hooks/gate-logic')
 
 const GATE = path.join(__dirname, '..', '..', 'hooks', 'reatom-gate.js')
 
@@ -816,4 +816,40 @@ test('sessionMutated scans sidechain entries like any other', () => {
     message: { content: [{ type: 'tool_use', name: 'Edit', input: {} }] }
   })
   assert.equal(sessionMutated(transcriptOf('Read') + '\n' + side), true)
+})
+
+test('gateDecision converts a block into a consultation skip for a read-only session', () => {
+  const decision = gateDecision({ ...base, sessionMutated: false })
+  assert.equal(decision.block, false)
+  assert.equal(decision.writeCache, false, 'a consultation skip must not bless the pairs')
+  assert.deepEqual(decision.consultationSkip, ['src/model.ts'], 'union of assignment lists, deduplicated')
+})
+
+test('gateDecision still blocks when the session mutated or the field is absent', () => {
+  assert.equal(gateDecision({ ...base, sessionMutated: true }).block, true)
+  assert.equal(gateDecision(base).block, true, 'absent field fails closed')
+})
+
+test('gateDecision still prunes the cache for a fully cached read-only session', () => {
+  const decision = gateDecision({ ...base, sessionMutated: false, plan: { ...base.plan, assignments: {} } })
+  assert.equal(decision.block, false)
+  assert.equal(decision.writeCache, true, 'pruning never blesses new pairs, so it survives the skip')
+})
+
+test('buildSkipMessage names up to five files then counts the rest', () => {
+  const short = buildSkipMessage(['a.ts', 'b.ts'])
+  assert.match(short, /2 changed files left unaudited/)
+  assert.match(short, /this session made no edits/)
+  assert.match(short, /a\.ts, b\.ts/)
+  assert.match(short, /\/reatom-audit/)
+  assert.match(short, /\.reatom-gate-ignore/)
+  assert.ok(!short.includes('more'), 'no overflow marker under the cap')
+
+  const long = buildSkipMessage(['a.ts', 'b.ts', 'c.ts', 'd.ts', 'e.ts', 'f.ts', 'g.ts'])
+  assert.match(long, /7 changed files left unaudited/)
+  assert.match(long, /e\.ts/)
+  assert.ok(!long.includes('f.ts'), 'files past the cap are not listed individually')
+  assert.match(long, /…and 2 more/)
+
+  assert.match(buildSkipMessage(['a.ts']), /1 changed file left unaudited/)
 })

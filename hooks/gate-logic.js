@@ -28,6 +28,18 @@ function gateDecision(ctx) {
   // Nothing new to audit, but the pruned cache is still worth persisting.
   if (dispatched.length === 0) return { block: false, writeCache: true, cache: ctx.plan.nextCache }
 
+  // The one agent-independent skip: the transcript proved this session never
+  // invoked a tool that could touch the working tree, so the diff is not its
+  // work. The cache stays unwritten — the changes stay unmarked and resurface
+  // at the next Stop of a session that did mutate something.
+  if (ctx.sessionMutated === false) {
+    return {
+      block: false,
+      writeCache: false,
+      consultationSkip: [...new Set(dispatched.flatMap((d) => ctx.plan.assignments[d]))]
+    }
+  }
+
   return {
     block: true,
     writeCache: true,
@@ -89,6 +101,18 @@ function buildReason(plan, dispatched) {
     'each dismissal and its rationale so the operator can judge it.'
   )
   return lines.join('\n')
+}
+
+const MAX_SKIP_LISTED = 5
+
+function buildSkipMessage(files) {
+  const listed = files.slice(0, MAX_SKIP_LISTED).join(', ')
+  const rest = files.length > MAX_SKIP_LISTED ? ` …and ${files.length - MAX_SKIP_LISTED} more` : ''
+  return (
+    `Reatom gate: ${files.length} changed file${files.length === 1 ? '' : 's'} left unaudited — ` +
+    `this session made no edits. Files: ${listed}${rest}. ` +
+    `Run /reatom-audit <paths> for a one-off check, or add paths to .reatom-gate-ignore to exclude them permanently.`
+  )
 }
 
 const DOMAINS = ['async', 'state', 'lifecycle', 'routing-forms', 'react']
@@ -299,6 +323,7 @@ module.exports = {
   sessionMutated,
   readIgnorePatterns,
   filterIgnored,
-  planAudit
+  planAudit,
+  buildSkipMessage
 }
 
