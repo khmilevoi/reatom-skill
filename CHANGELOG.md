@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.5.0
+
+A consultation-only session — one that answered questions and never invoked
+a tool that could touch the working tree — still got blocked on changes made
+outside it, and the block wrote the cache, permanently marking those changes
+as asked-about after being seen once by a session that had nothing to do
+with them. And when a session genuinely could not tell whether its tools
+touched a file, the triage silently spent audit tokens instead of asking the
+one party who knows.
+
+### Added
+
+- **Consultation-session skip.** Before blocking, the Stop gate scans the
+  session transcript (`transcript_path`) against an allowlist of provably
+  read-only tools (Read, Grep, Glob, WebSearch, WebFetch, TodoWrite,
+  AskUserQuestion, ToolSearch, EnterPlanMode, ExitPlanMode). If the session
+  never invoked anything else, the diff cannot be its work: the gate allows
+  silently, leaves the cache untouched — the changes resurface at the next
+  Stop of a session that did mutate something — and tells the operator in a
+  one-line systemMessage which files were left unaudited. Everything is
+  fail-closed: Bash, Task, Skill, MCP tools, unknown names, a malformed
+  transcript line, or a missing transcript all count as mutating and keep
+  the blocking behavior.
+- **Confidence triage in the block reason.** The triage protocol now has
+  three outcomes instead of two: changed by this session → audit; certainly
+  not changed → skip and report (unchanged from 0.4.0); genuinely unsure →
+  ask the operator one AskUserQuestion naming all unsure files, with
+  "Audit (recommended)" and "Skip" options, falling back to auditing when
+  asking is impossible.
+
 ## 0.4.0
 
 The gate routed every changed file to auditors no matter who changed it or

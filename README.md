@@ -28,19 +28,26 @@ The gate is incremental: it caches which file/domain pairs it has already audite
 which rule slice, and skips a pair once its cache entry matches. A Stop can pass with no
 auditor dispatched at all when everything routed has already been audited.
 
-Two escape hatches keep the gate honest about scope. A `.reatom-gate-ignore`
+Three mechanisms keep the gate honest about scope. A `.reatom-gate-ignore`
 file at the project root — gitignore-style globs, `#` comments, no negation —
 permanently excludes paths that are not audit surface, such as test fixtures
 or scanner code that treats Reatom tokens as data. It is yours to maintain:
 the plugin never writes to it, and `/reatom-audit` deliberately does not
-apply it, so a manual audit still reaches excluded paths. Separately, the
-block reason opens with a triage step: the session judges, from its own
+apply it, so a manual audit still reaches excluded paths. Second, the gate
+proves consultation-only sessions innocent mechanically: before blocking, it
+scans the session transcript against an allowlist of read-only tools, and a
+session that never invoked anything that could touch the working tree is
+allowed through silently — the cache stays unwritten so the changes resurface
+in the next working session, and a one-line message tells the operator which
+files were left unaudited. Anything unprovable — a Bash call, a subagent, an
+unreadable transcript — fails closed to a normal block. Third, the block
+reason opens with a triage step: the session judges, from its own
 conversation context and without inspecting files, whether it actually made
-the listed changes. Changes made outside the session are skipped rather than
-audited — the gate only sees the git diff, so a consultation-only session
-would otherwise be blocked on someone else's work — and every skip is
-reported to the operator along with the follow-ups (`/reatom-audit <paths>`,
-or an ignore entry).
+the listed changes. Changes it is certain it did not make are skipped and
+reported to the operator with the follow-ups (`/reatom-audit <paths>`, or an
+ignore entry); files it is genuinely unsure about go to the operator as one
+AskUserQuestion — audit or skip — and unsure still fails toward auditing
+when asking is impossible.
 
 Non-Reatom projects and sessions with no TypeScript change exit silently.
 
