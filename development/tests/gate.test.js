@@ -145,9 +145,9 @@ function makeRepo({ reatom = true, changed = 'src/model.ts', branch = 'main' } =
   return dir
 }
 
-function runGate(dir, stopHookActive = false) {
+function runGate(dir, stopHookActive = false, transcriptPath = undefined) {
   return spawnSync('node', [GATE], {
-    input: JSON.stringify({ cwd: dir, stop_hook_active: stopHookActive }),
+    input: JSON.stringify({ cwd: dir, stop_hook_active: stopHookActive, transcript_path: transcriptPath }),
     encoding: 'utf8'
   })
 }
@@ -852,4 +852,39 @@ test('buildSkipMessage names up to five files then counts the rest', () => {
   assert.match(long, /…and 2 more/)
 
   assert.match(buildSkipMessage(['a.ts']), /1 changed file left unaudited/)
+})
+
+function writeTranscript(toolNames) {
+  const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'reatom-transcript-')), 'session.jsonl')
+  fs.writeFileSync(
+    file,
+    toolNames
+      .map((name) =>
+        JSON.stringify({ type: 'assistant', message: { content: [{ type: 'tool_use', name, input: {} }] } })
+      )
+      .join('\n') + '\n'
+  )
+  return file
+}
+
+test('integration: a read-only session skips with a message and leaves the cache unwritten', () => {
+  const dir = makeRepo()
+  const out = JSON.parse(runGate(dir, false, writeTranscript(['Read', 'Grep'])).stdout.trim())
+  assert.equal(out.decision, undefined, 'no block for a consultation session')
+  assert.match(out.systemMessage, /left unaudited/)
+  assert.match(out.systemMessage, /src\/model\.ts/)
+  const second = JSON.parse(runGate(dir).stdout.trim())
+  assert.equal(second.decision, 'block', 'the skip must not have blessed the pairs')
+})
+
+test('integration: a mutating session still blocks', () => {
+  const dir = makeRepo()
+  const out = JSON.parse(runGate(dir, false, writeTranscript(['Read', 'Edit'])).stdout.trim())
+  assert.equal(out.decision, 'block')
+})
+
+test('integration: a missing transcript file fails closed to a block', () => {
+  const dir = makeRepo()
+  const out = JSON.parse(runGate(dir, false, path.join(dir, 'no-such-transcript.jsonl')).stdout.trim())
+  assert.equal(out.decision, 'block')
 })

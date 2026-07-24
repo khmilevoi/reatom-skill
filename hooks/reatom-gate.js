@@ -1,7 +1,7 @@
 const fs = require('node:fs')
 const path = require('node:path')
 const { spawnSync } = require('node:child_process')
-const { auditableFiles, gateDecision, parseCache, planAudit, buildTriggers, readIgnorePatterns, filterIgnored } = require('./gate-logic')
+const { auditableFiles, gateDecision, parseCache, planAudit, buildTriggers, readIgnorePatterns, filterIgnored, sessionMutated, buildSkipMessage } = require('./gate-logic')
 
 function readStdin() {
   try {
@@ -232,7 +232,8 @@ function main() {
     isGitRepo: false,
     isReatomProject: false,
     auditableFiles: [],
-    plan: null
+    plan: null,
+    sessionMutated: true
   }
 
   let warning = null
@@ -270,6 +271,15 @@ function main() {
               triggers: buildTriggers(rules)
             })
           }
+          if (ctx.plan && Object.keys(ctx.plan.assignments).length > 0 && input.transcript_path) {
+            let transcript = null
+            try {
+              transcript = fs.readFileSync(input.transcript_path, 'utf8')
+            } catch {
+              // an unreadable transcript proves nothing → stays mutated
+            }
+            if (transcript !== null) ctx.sessionMutated = sessionMutated(transcript)
+          }
         }
       }
     }
@@ -285,7 +295,10 @@ function main() {
     output.decision = 'block'
     output.reason = decision.reason
   }
-  if (warning) output.systemMessage = warning
+  const messages = [warning]
+  if (decision.consultationSkip) messages.push(buildSkipMessage(decision.consultationSkip))
+  const systemMessage = messages.filter(Boolean).join('\n')
+  if (systemMessage) output.systemMessage = systemMessage
   if (Object.keys(output).length > 0) process.stdout.write(JSON.stringify(output) + '\n')
 }
 
