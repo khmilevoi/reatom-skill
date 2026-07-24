@@ -4,7 +4,7 @@ const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
 const { spawnSync } = require('node:child_process')
-const { auditableFiles, gateDecision, DOMAINS } = require('../../hooks/gate-logic')
+const { auditableFiles, gateDecision, DOMAINS, sessionMutated } = require('../../hooks/gate-logic')
 
 const GATE = path.join(__dirname, '..', '..', 'hooks', 'reatom-gate.js')
 
@@ -766,4 +766,54 @@ test('a lone double star ignores everything', () => {
 
 test('a bare slash pattern matches nothing', () => {
   assert.deepEqual(filterIgnored(['src/a.ts', 'a.ts'], ['/']), ['src/a.ts', 'a.ts'])
+})
+
+function transcriptOf(...toolNames) {
+  return toolNames
+    .map((name) =>
+      JSON.stringify({
+        type: 'assistant',
+        message: { content: [{ type: 'tool_use', name, input: {} }] }
+      })
+    )
+    .join('\n')
+}
+
+test('sessionMutated proves a read-only session clean', () => {
+  const readOnly = [
+    'Read', 'Grep', 'Glob', 'WebSearch', 'WebFetch', 'TodoWrite',
+    'AskUserQuestion', 'ToolSearch', 'EnterPlanMode', 'ExitPlanMode'
+  ]
+  assert.equal(sessionMutated(transcriptOf(...readOnly)), false)
+})
+
+test('sessionMutated treats a transcript with no tool calls as clean', () => {
+  const lines = [
+    JSON.stringify({ type: 'user', message: { content: 'just a question' } }),
+    JSON.stringify({ type: 'assistant', message: { content: [{ type: 'text', text: 'an answer' }] } })
+  ].join('\n')
+  assert.equal(sessionMutated(lines), false)
+})
+
+test('sessionMutated flags every tool outside the allowlist', () => {
+  for (const name of ['Edit', 'Write', 'Bash', 'Task', 'Skill', 'mcp__obsidian__write', 'BrandNewTool']) {
+    assert.equal(sessionMutated(transcriptOf('Read', name)), true, name)
+  }
+})
+
+test('sessionMutated fails closed on unparseable and empty input', () => {
+  assert.equal(sessionMutated(null), true)
+  assert.equal(sessionMutated(undefined), true)
+  assert.equal(sessionMutated(''), true)
+  assert.equal(sessionMutated('   \n  '), true)
+  assert.equal(sessionMutated(transcriptOf('Read') + '\n{broken'), true)
+})
+
+test('sessionMutated scans sidechain entries like any other', () => {
+  const side = JSON.stringify({
+    type: 'assistant',
+    isSidechain: true,
+    message: { content: [{ type: 'tool_use', name: 'Edit', input: {} }] }
+  })
+  assert.equal(sessionMutated(transcriptOf('Read') + '\n' + side), true)
 })

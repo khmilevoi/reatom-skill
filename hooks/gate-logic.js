@@ -145,6 +145,34 @@ function parseCache(raw) {
   }
 }
 
+const READ_ONLY_TOOLS = new Set([
+  'Read', 'Grep', 'Glob', 'WebSearch', 'WebFetch', 'TodoWrite',
+  'AskUserQuestion', 'ToolSearch', 'EnterPlanMode', 'ExitPlanMode'
+])
+
+// A negative proof, not attribution: the question is never "which files did
+// the session change" but "could it have changed anything at all". Anything
+// not provably read-only — Bash, Task, Skill, MCP tools, unknown names, a
+// line that does not parse — flips the answer to yes.
+function sessionMutated(raw) {
+  if (typeof raw !== 'string' || raw.trim() === '') return true
+  for (const line of raw.split('\n')) {
+    if (!line.trim()) continue
+    let entry
+    try {
+      entry = JSON.parse(line)
+    } catch {
+      return true
+    }
+    const content = entry && entry.message && entry.message.content
+    if (!Array.isArray(content)) continue
+    for (const block of content) {
+      if (block && block.type === 'tool_use' && !READ_ONLY_TOOLS.has(block.name)) return true
+    }
+  }
+  return false
+}
+
 function readIgnorePatterns(raw) {
   if (typeof raw !== 'string') return []
   return raw
@@ -267,6 +295,8 @@ module.exports = {
   pairKey,
   pairHash,
   parseCache,
+  READ_ONLY_TOOLS,
+  sessionMutated,
   readIgnorePatterns,
   filterIgnored,
   planAudit
