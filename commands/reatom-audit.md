@@ -15,9 +15,9 @@ Audit Reatom code in this repository against
 | anything else | `node "${CLAUDE_PLUGIN_ROOT}/scripts/route.js" <the arguments, verbatim>` |
 
 `init` is not an audit. It writes the "when to run this" block into the project's
-`CLAUDE.md`, inside a `<reatom-audit>…</reatom-audit>` tag pair, creating the file
-if it is missing and rewriting whatever sits between the tags if it is not. Report
-what the script printed and stop — there is nothing to dispatch.
+`CLAUDE.md`, between `<!-- reatom-audit -->` and `<!-- /reatom-audit -->`, creating
+the file if it is missing and rewriting whatever sits between those delimiters if
+it is not. Report what the script printed and stop — there is nothing to dispatch.
 
 ## Scope
 

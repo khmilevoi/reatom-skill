@@ -737,8 +737,8 @@ function scratch() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'reatom-init-'))
 }
 
-const OPEN = '<reatom-audit>'
-const CLOSE = '</reatom-audit>'
+const OPEN = '<!-- reatom-audit -->'
+const CLOSE = '<!-- /reatom-audit -->'
 
 test('init writes a CLAUDE.md that does not exist yet', () => {
   const dir = scratch()
@@ -746,9 +746,23 @@ test('init writes a CLAUDE.md that does not exist yet', () => {
   assert.equal(out.status, 0, out.stderr)
   assert.match(out.stdout, /^Created /)
   const written = fs.readFileSync(path.join(dir, 'CLAUDE.md'), 'utf8')
-  assert.ok(written.includes(OPEN) && written.includes(CLOSE), 'the block is tag-delimited')
+  assert.ok(written.includes(OPEN) && written.includes(CLOSE), 'the block is comment-delimited')
+  assert.match(written, /^## Reatom audit$/m, 'the block is a real markdown section')
   assert.match(written, /\/reatom-audit/, 'the block names the command')
   assert.match(written, /\/reatom-audit all/, 'and the whole-repository form')
+})
+
+test('init uses delimiters that do not open an HTML block in markdown', () => {
+  const dir = scratch()
+  runInit(dir)
+  const written = fs.readFileSync(path.join(dir, 'CLAUDE.md'), 'utf8')
+  // A bare `<reatom-audit>` would start a CommonMark HTML block and swallow the
+  // paragraph after it. Comments render as nothing and leave the body markdown.
+  assert.ok(!/<reatom-audit>/.test(written), 'no bare opening tag')
+  assert.ok(!/<\/reatom-audit>/.test(written), 'no bare closing tag')
+  for (const delimiter of [OPEN, CLOSE]) {
+    assert.ok(delimiter.startsWith('<!--') && delimiter.endsWith('-->'), `${delimiter} is a comment`)
+  }
 })
 
 test('init is idempotent', () => {
@@ -770,7 +784,7 @@ test('init appends to an existing CLAUDE.md without disturbing it', () => {
   assert.ok(written.indexOf('Existing rules.') < written.indexOf(OPEN), 'the block goes at the end')
 })
 
-test('init rewrites whatever sits between the tags and leaves the tags alone', () => {
+test('init rewrites whatever sits between the delimiters and leaves them alone', () => {
   const dir = scratch()
   fs.writeFileSync(
     path.join(dir, 'CLAUDE.md'),
@@ -793,7 +807,7 @@ test('init rewrites an empty block too', () => {
   assert.match(fs.readFileSync(path.join(dir, 'CLAUDE.md'), 'utf8'), /\/reatom-audit all/)
 })
 
-test('init refuses an unclosed tag', () => {
+test('init refuses an unclosed delimiter', () => {
   const dir = scratch()
   fs.writeFileSync(path.join(dir, 'CLAUDE.md'), `# Project\n\n${OPEN}\nhalf a block\n`)
   const out = runInit(dir)
@@ -810,7 +824,7 @@ test('init refuses a file carrying two blocks', () => {
   )
   const out = runInit(dir)
   assert.equal(out.status, 1, 'rewriting one would leave the other still instructing the agent')
-  assert.match(out.stdout, /2 <reatom-audit> and 2 <\/reatom-audit>/)
+  assert.match(out.stdout, /2 <!-- reatom-audit --> and 2 <!-- \/reatom-audit -->/)
   const written = fs.readFileSync(path.join(dir, 'CLAUDE.md'), 'utf8')
   assert.match(written, /first/)
   assert.match(written, /second/)

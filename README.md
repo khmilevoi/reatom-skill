@@ -16,12 +16,12 @@ Then, once per project that should use the audit:
 /reatom-audit init
 ```
 
-That writes a short block into the project's `CLAUDE.md`, inside a
-`<reatom-audit>…</reatom-audit>` tag pair, saying when the audit is due — after a change
-that touched Reatom code, before the work is reported as done. Re-running `init` rewrites
-whatever sits between the tags, so a later release's wording lands without the operator
-having to diff anything. Nothing in this plugin fires on its own; that block is the whole
-trigger.
+That writes a short block into the project's `CLAUDE.md`, between
+`<!-- reatom-audit -->` and `<!-- /reatom-audit -->`, saying when the audit is due —
+after a change that touched Reatom code, before the work is reported as done. Re-running
+`init` rewrites whatever sits between those delimiters, so a later release's wording lands
+without the operator having to diff anything. Nothing in this plugin fires on its own;
+that block is the whole trigger.
 
 ## What you get
 

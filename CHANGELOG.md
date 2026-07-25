@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.6.1
+
+### Fixed
+
+- **The `init` block no longer breaks the markdown it is written into.** 0.6.0
+  delimited it with a bare `<reatom-audit>` tag, which in CommonMark opens an
+  HTML block: the paragraph after it is swallowed as raw HTML and the tags
+  themselves render as nothing. The delimiters are now `<!-- reatom-audit -->`
+  and `<!-- /reatom-audit -->`, which render as nothing on purpose and still
+  reach the model, since Claude Code passes `CLAUDE.md` through verbatim. The
+  block also carries its `## Reatom audit` heading again, so it reads as a
+  section rather than as unattributed prose. If you ran `init` on 0.6.0, delete
+  the old `<reatom-audit>` block by hand — nothing migrates it, and a leftover
+  one keeps instructing the agent.
+
 ## 0.6.0
 
 The Stop gate fired on the diff, not on the work. Every mechanism added since

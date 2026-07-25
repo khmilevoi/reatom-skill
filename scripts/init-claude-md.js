@@ -1,17 +1,24 @@
 const fs = require('node:fs')
 const path = require('node:path')
 
-// One paired tag rather than two comment markers: the content between them is
-// rewritten wholesale on every run, so the wording can change from release to
-// release without the operator having to notice or intervene. The tags
-// themselves are never rewritten — whatever indentation or surroundings the
-// file already gives them survives.
-const OPEN = '<reatom-audit>'
-const CLOSE = '</reatom-audit>'
+// A paired HTML comment, not a bare `<reatom-audit>` tag: in markdown an
+// unknown tag opens an HTML block that swallows the paragraph after it, so the
+// delimiter would silently break the document it is delimiting. A comment
+// renders as nothing and still reaches the model, because Claude Code feeds
+// CLAUDE.md through verbatim.
+//
+// The content between the pair is rewritten wholesale on every run, so the
+// wording can change from release to release without the operator noticing or
+// intervening. The delimiters themselves are never rewritten — whatever
+// indentation or surroundings the file gives them survives.
+const OPEN = '<!-- reatom-audit -->'
+const CLOSE = '<!-- /reatom-audit -->'
 
 // The whole point of the plugin after 0.6: nothing fires on its own, so this
 // paragraph is the only thing that tells an agent when the audit is due.
 const BODY = [
+  '## Reatom audit',
+  '',
   'This project uses Reatom, and the `reatom` plugin ships an audit that checks',
   'TypeScript against the Reatom rule registry.',
   '',
