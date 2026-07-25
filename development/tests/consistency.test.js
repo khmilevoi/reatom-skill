@@ -195,34 +195,23 @@ test("an auditor's body cites only its own rules and states its full range", () 
   assert.deepEqual(staleRanges, [], `briefs understate their range: ${staleRanges.join(' | ')}`)
 })
 
-test('the gate dispatches exactly the auditors that exist', () => {
-  const { gateDecision, DOMAINS } = require(path.join(ROOT, 'hooks', 'gate-logic'))
-  const decision = gateDecision({
-    stopHookActive: false,
-    isGitRepo: true,
-    isReatomProject: true,
-    auditableFiles: ['src/model.ts'],
-    plan: {
-      assignments: Object.fromEntries(DOMAINS.map((d) => [d, ['src/model.ts']])),
-      notDispatched: [],
-      fullyCached: [],
-      skipped: 0,
-      nextCache: {}
-    }
+test('the router dispatches exactly the auditors that exist', () => {
+  const { formatOrders, DOMAINS } = require(path.join(ROOT, 'scripts', 'routing'))
+  const orders = formatOrders({
+    assignments: Object.fromEntries(DOMAINS.map((d) => [d, ['src/model.ts']])),
+    notDispatched: [],
+    fullyCached: [],
+    skipped: 0,
+    nextCache: {}
   })
-  assert.equal(decision.block, true)
   for (const name of Object.keys(AUDITORS)) {
-    assert.ok(decision.reason.includes(name), `the gate dispatches ${name}`)
+    assert.ok(orders.includes(name), `the router dispatches ${name}`)
     assert.ok(fs.existsSync(path.join(ROOT, 'agents', `${name}.md`)), `${name}.md exists`)
   }
 })
 
-test('hooks.json registers the Stop gate through the plugin root', () => {
-  const hooks = JSON.parse(fs.readFileSync(path.join(ROOT, 'hooks', 'hooks.json'), 'utf8'))
-  const command = hooks.hooks.Stop[0].hooks[0].command
-  assert.ok(command.includes('${CLAUDE_PLUGIN_ROOT}'), 'the gate is resolved from the plugin root')
-  assert.ok(command.includes('reatom-gate.js'), 'the gate script is named')
-  assert.ok(fs.existsSync(path.join(ROOT, 'hooks', 'reatom-gate.js')), 'the gate script exists')
+test('the plugin registers no hooks — nothing fires on its own', () => {
+  assert.ok(!fs.existsSync(path.join(ROOT, 'hooks')), 'the Stop gate is gone; the command replaced it')
 })
 
 test('SKILL.md and rules.md reference exactly the same rule ids', () => {
@@ -383,19 +372,28 @@ test('every auditor opens with a closed output contract', () => {
   }
 })
 
-test('the command routes through the same code as the gate', () => {
+test('the command names every mode and routes each through a real script', () => {
   const command = fs.readFileSync(path.join(ROOT, 'commands', 'reatom-audit.md'), 'utf8')
-  assert.ok(command.includes('hooks/route.js'), 'the command calls the shared router')
-  assert.ok(command.includes('audits everything you point it at'), 'the command explains it is not incremental')
+  assert.ok(command.includes('scripts/route.js'), 'the command calls the router')
+  assert.ok(command.includes('scripts/init-claude-md.js'), 'and the CLAUDE.md initializer')
+  for (const flag of ['--changed', '--all']) {
+    assert.ok(command.includes(flag), `the command spells out ${flag}`)
+  }
   assert.ok(
     !/Dispatch these five/.test(command),
     'the command no longer hard-codes a five-way fan-out'
   )
 })
 
+test('every script the command names exists', () => {
+  for (const name of ['route.js', 'init-claude-md.js', 'routing.js']) {
+    assert.ok(fs.existsSync(path.join(ROOT, 'scripts', name)), `scripts/${name} exists`)
+  }
+})
+
 test('route.js prints per-auditor orders for a real file', () => {
   const target = path.join('development', 'fixtures', 'violations', 'polling-timer.ts')
-  const out = spawnSync('node', [path.join(ROOT, 'hooks', 'route.js'), target], {
+  const out = spawnSync('node', [path.join(ROOT, 'scripts', 'route.js'), target], {
     cwd: ROOT,
     encoding: 'utf8'
   })

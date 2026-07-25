@@ -47,7 +47,7 @@ hand after changing any brief or rule:
    detection failure when it simply was not in the slice the auditor read.
 
 1. For each auditor, dispatch it against `violations/` with the same
-   prompt the gate produces.
+   prompt the router produces.
 2. Score: does it report exactly the ids in `expected.json` for its own domain?
    Rules from other domains are not its job and are not misses.
 3. Dispatch all five against the clean fixture. **Any** finding is a failure —

@@ -1,38 +1,26 @@
 const fs = require('node:fs')
 const path = require('node:path')
 const { spawnSync } = require('node:child_process')
-const { auditableFiles, gateDecision, parseCache, planAudit, buildTriggers, readIgnorePatterns, filterIgnored, sessionMutated, buildSkipMessage } = require('./gate-logic')
+const {
+  auditableFiles,
+  buildTriggers,
+  planAudit,
+  parseCache,
+  readIgnorePatterns,
+  filterIgnored,
+  formatOrders
+} = require('./routing')
 
-function readStdin() {
-  try {
-    const raw = fs.readFileSync(0, 'utf8').trim()
-    return raw ? JSON.parse(raw) : {}
-  } catch {
-    return {}
-  }
-}
+const REFERENCES = path.join(__dirname, '..', 'skills', 'reatom', 'references')
 
 function git(cwd, args) {
   const r = spawnSync('git', args, { cwd, encoding: 'utf8' })
   return r.status === 0 ? r.stdout : null
 }
 
-function isGitRepo(cwd) {
-  return git(cwd, ['rev-parse', '--git-dir']) !== null
-}
-
-function isReatomProject(cwd) {
-  const listed = git(cwd, ['ls-files', 'package.json', '*/package.json', '**/package.json'])
-  if (listed === null) return false
-  const files = [...new Set(listed.split('\n').map((s) => s.trim()).filter(Boolean))]
-  for (const file of files) {
-    try {
-      if (/"@reatom\//.test(fs.readFileSync(path.join(cwd, file), 'utf8'))) return true
-    } catch {
-      // unreadable package.json → treat as no evidence
-    }
-  }
-  return false
+function repoRoot(cwd) {
+  const top = git(cwd, ['rev-parse', '--show-toplevel'])
+  return top === null ? null : top.trim()
 }
 
 const BASE_CANDIDATES = ['main', 'master', 'develop', 'trunk']
@@ -106,18 +94,18 @@ function detectBaseRef(cwd) {
 const BASE_CACHE_FILE = 'reatom-base-branch'
 const NO_BASE = 'none'
 
-function baseCachePath(cwd) {
+function gitDirPath(cwd, name) {
   const gitDir = git(cwd, ['rev-parse', '--git-dir'])
-  return path.resolve(cwd, gitDir ? gitDir.trim() : '.git', BASE_CACHE_FILE)
+  return path.resolve(cwd, gitDir ? gitDir.trim() : '.git', name)
 }
 
 function baseWarning(ref, pinFile) {
   return ref
-    ? `Reatom gate guessed the base branch as "${ref}" from the commit graph — ` +
+    ? `Reatom audit guessed the base branch as "${ref}" from the commit graph — ` +
       `no origin/HEAD and no ${BASE_CANDIDATES.join('/')} branch was found. ` +
       `This guess is rechecked automatically if a better answer shows up later. ` +
       `To pin it permanently instead, or to correct it, write the ref into ${pinFile}.`
-    : `Reatom gate could not identify a base branch, so only working-tree changes ` +
+    : `Reatom audit could not identify a base branch, so only working-tree changes ` +
       `are audited and committed branch work goes unchecked. This is rechecked ` +
       `automatically if a base branch appears later. To pin an answer permanently ` +
       `(or write "none" to silence this for good), edit ${pinFile}.`
@@ -125,7 +113,7 @@ function baseWarning(ref, pinFile) {
 
 const AUTO_SUFFIX = ' auto'
 
-// A pin the gate wrote itself is marked so it can be revisited cheaply later;
+// A pin the router wrote itself is marked so it can be revisited cheaply later;
 // a pin the operator wrote by hand (no suffix) is trusted forever, which is
 // the whole point of letting them override a wrong guess.
 function parsePin(raw) {
@@ -148,11 +136,11 @@ function writePin(pinFile, value) {
 // The pin exists so detection runs once and so the operator has somewhere
 // concrete to correct a wrong answer. A manually-written pin (no auto suffix)
 // is trusted forever — that is what the operator asked for. An auto-written
-// pin (the gate's own guess, or "nothing found") gets a cheap origin/HEAD +
+// pin (the router's own guess, or "nothing found") gets a cheap origin/HEAD +
 // conventional-name recheck on every run, so a base branch that appears later
 // is picked up without waiting on the guess to go stale on its own.
 function resolveBaseRef(cwd) {
-  const pinFile = baseCachePath(cwd)
+  const pinFile = gitDirPath(cwd, BASE_CACHE_FILE)
   let raw = null
   try {
     raw = fs.readFileSync(pinFile, 'utf8')
@@ -181,10 +169,9 @@ function resolveBaseRef(cwd) {
   return { ref, warning: guessed ? baseWarning(ref, pinFile) : null }
 }
 
-// Committed branch work plus the working tree. `architecture` only looks at
-// uncommitted changes; agents commit mid-session, so that would go blind.
-// A null baseRef means no base branch was found — the working tree is all
-// that stays in scope, which is the pre-detection behaviour.
+// Committed branch work plus the working tree. Uncommitted changes alone would
+// go blind the moment an agent commits mid-session. A null baseRef means no
+// base branch was found — the working tree is all that stays in scope.
 function changedFiles(cwd, baseRef) {
   const base = baseRef ? git(cwd, ['merge-base', 'HEAD', baseRef]) : null
   const committed = base ? git(cwd, ['diff', '--diff-filter=d', '--name-only', base.trim(), 'HEAD']) || '' : ''
@@ -198,18 +185,21 @@ function changedFiles(cwd, baseRef) {
   return [...new Set(all)]
 }
 
-const REFERENCES = path.join(__dirname, '..', 'skills', 'reatom', 'references')
-const CACHE_FILE = 'reatom-audit-last'
-
-function cachePath(cwd) {
-  const gitDir = git(cwd, ['rev-parse', '--git-dir'])
-  const resolved = gitDir ? gitDir.trim() : '.git'
-  return path.resolve(cwd, resolved, CACHE_FILE)
+// Everything the repository holds, tracked or not yet added. Index entries whose
+// working-tree file is gone are dropped: an unreadable file fans out to every
+// auditor, and a whole-repo sweep is the worst place to do that by accident.
+function repositoryFiles(cwd) {
+  const listed = git(cwd, ['ls-files', '--cached', '--others', '--exclude-standard', '--', '*.ts', '*.tsx'])
+  if (listed === null) return []
+  const all = [...new Set(listed.split('\n').map((s) => s.trim()).filter(Boolean))]
+  return all.filter((f) => fs.existsSync(path.join(cwd, f)))
 }
+
+const CACHE_FILE = 'reatom-audit-last'
 
 function readCache(cwd) {
   try {
-    return parseCache(fs.readFileSync(cachePath(cwd), 'utf8'))
+    return parseCache(fs.readFileSync(gitDirPath(cwd, CACHE_FILE), 'utf8'))
   } catch {
     return {}
   }
@@ -217,89 +207,122 @@ function readCache(cwd) {
 
 function writeCache(cwd, cache) {
   try {
-    fs.writeFileSync(cachePath(cwd), JSON.stringify(cache) + '\n')
+    fs.writeFileSync(gitDirPath(cwd, CACHE_FILE), JSON.stringify(cache) + '\n')
   } catch {
     // fail-open: the cache is only an optimization
   }
 }
 
-function main() {
-  const input = readStdin()
-  const cwd = input.cwd || process.cwd()
+// The current name first, the pre-0.6 name second. An existing project keeps
+// its exclusions across the rename without an edit; only the first file found
+// is read, so the two never merge.
+const IGNORE_FILES = ['.reatom-audit-ignore', '.reatom-gate-ignore']
 
-  const ctx = {
-    stopHookActive: Boolean(input.stop_hook_active),
-    isGitRepo: false,
-    isReatomProject: false,
-    auditableFiles: [],
-    plan: null,
-    sessionMutated: true
-  }
-
-  let warning = null
-
-  if (!ctx.stopHookActive) {
-    ctx.isGitRepo = isGitRepo(cwd)
-    if (ctx.isGitRepo) {
-      ctx.isReatomProject = isReatomProject(cwd)
-      if (ctx.isReatomProject) {
-        const base = resolveBaseRef(cwd)
-        warning = base.warning
-        let ignoreRaw = null
-        try {
-          ignoreRaw = fs.readFileSync(path.join(cwd, '.reatom-gate-ignore'), 'utf8')
-        } catch {
-          // no ignore file (or unreadable) → nothing is excluded
-        }
-        ctx.auditableFiles = filterIgnored(
-          auditableFiles(changedFiles(cwd, base.ref)),
-          readIgnorePatterns(ignoreRaw)
-        )
-        if (ctx.auditableFiles.length > 0) {
-          let rules = null
-          try {
-            rules = fs.readFileSync(path.join(REFERENCES, 'rules.md'), 'utf8')
-          } catch {
-            // fail-open: an unreadable registry leaves ctx.plan null
-          }
-          if (rules !== null) {
-            ctx.plan = planAudit({
-              files: ctx.auditableFiles,
-              readFile: (f) => fs.readFileSync(path.join(cwd, f), 'utf8'),
-              readSlice: (d) => fs.readFileSync(path.join(REFERENCES, `rules-${d}.md`), 'utf8'),
-              cache: readCache(cwd),
-              triggers: buildTriggers(rules)
-            })
-          }
-          if (ctx.plan && Object.keys(ctx.plan.assignments).length > 0 && input.transcript_path) {
-            let transcript = null
-            try {
-              transcript = fs.readFileSync(input.transcript_path, 'utf8')
-            } catch {
-              // an unreadable transcript proves nothing → stays mutated
-            }
-            if (transcript !== null) ctx.sessionMutated = sessionMutated(transcript)
-          }
-        }
-      }
+function readIgnore(cwd) {
+  for (const name of IGNORE_FILES) {
+    try {
+      return fs.readFileSync(path.join(cwd, name), 'utf8')
+    } catch {
+      // try the next name
     }
   }
+  return null
+}
 
-  const decision = gateDecision(ctx)
-  if (decision.writeCache && decision.cache) writeCache(cwd, decision.cache)
+function fail(message) {
+  process.stdout.write(message + '\n')
+  process.exitCode = 1
+}
 
-  // systemMessage is orthogonal to decision: the base-branch warning must reach
-  // the operator on runs where there is nothing to block on.
-  const output = {}
-  if (decision.block) {
-    output.decision = 'block'
-    output.reason = decision.reason
+const USAGE =
+  'Usage: route.js [--changed | --all | <path>…]\n' +
+  '  --changed  (default) TypeScript changed against the base branch, plus the working tree\n' +
+  '  --all      every TypeScript file in the repository\n' +
+  '  <path>…    exactly the given files, changed or not'
+
+// The bare words are accepted alongside the flags because they are what the
+// operator types after `/reatom-audit`, and neither is a path that could ever
+// be auditable TypeScript — so nothing is lost by reading them as the mode.
+function resolveScope(args) {
+  if (args.includes('--help') || args.includes('-h')) return { mode: 'help' }
+  if (args[0] === '--all' || args[0] === 'all') return { mode: 'all' }
+  if (args.length === 0 || args[0] === '--changed' || args[0] === 'changed') return { mode: 'changed' }
+  if (args[0] === 'init') return { mode: 'init' }
+  return { mode: 'paths', paths: args }
+}
+
+function main() {
+  const args = process.argv.slice(2)
+  const { mode, paths } = resolveScope(args)
+  if (mode === 'help') {
+    process.stdout.write(USAGE + '\n')
+    return
   }
-  const messages = [warning]
-  if (decision.consultationSkip) messages.push(buildSkipMessage(decision.consultationSkip))
-  const systemMessage = messages.filter(Boolean).join('\n')
-  if (systemMessage) output.systemMessage = systemMessage
-  if (Object.keys(output).length > 0) process.stdout.write(JSON.stringify(output) + '\n')
+  if (mode === 'init') {
+    return fail('init is not an audit scope — run scripts/init-claude-md.js instead.')
+  }
+
+  const cwd = process.cwd()
+  let root = cwd
+  let files = []
+  let scope = ''
+  let warning = null
+
+  if (mode === 'paths') {
+    files = auditableFiles(paths)
+    scope = 'Scope: COUNT named on the command line. ' +
+      'The ignore file is deliberately not applied — you asked for these by name.'
+  } else {
+    root = repoRoot(cwd)
+    if (root === null) return fail('Not a git repository — --changed and --all need one. Name the files instead.')
+
+    if (mode === 'all') {
+      files = auditableFiles(repositoryFiles(root))
+      scope = `Scope: every TypeScript file in ${root} — COUNT.`
+    } else {
+      const base = resolveBaseRef(root)
+      warning = base.warning
+      files = auditableFiles(changedFiles(root, base.ref))
+      const against = base.ref ? `merge-base(HEAD, ${base.ref})..HEAD plus the working tree` : 'the working tree alone'
+      scope = `Scope: changed TypeScript in ${root} — ${against}. COUNT.`
+    }
+
+    // After the count is spelled out, so the number matches what is listed.
+    files = filterIgnored(files, readIgnorePatterns(readIgnore(root)))
+  }
+  scope = scope.replace('COUNT', `${files.length} file${files.length === 1 ? '' : 's'}`)
+
+  if (warning) process.stdout.write(warning + '\n\n')
+
+  if (files.length === 0) {
+    process.stdout.write('No auditable TypeScript in scope.\n')
+    return
+  }
+
+  let rules = null
+  try {
+    rules = fs.readFileSync(path.join(REFERENCES, 'rules.md'), 'utf8')
+  } catch {
+    return fail(
+      `Cannot read the rule registry at ${path.join(REFERENCES, 'rules.md')} — the audit cannot run. ` +
+      'Reinstall the plugin.'
+    )
+  }
+
+  // Only a repository-derived scope shares the cache: its paths are repo-relative
+  // and complete. Hand-named paths may be relative to anywhere, so they neither
+  // read nor write it — and --all deliberately re-audits, so it only writes.
+  const useCache = mode === 'changed'
+  const plan = planAudit({
+    files,
+    readFile: (f) => fs.readFileSync(path.resolve(root, f), 'utf8'),
+    readSlice: (d) => fs.readFileSync(path.join(REFERENCES, `rules-${d}.md`), 'utf8'),
+    cache: useCache ? readCache(root) : {},
+    triggers: buildTriggers(rules)
+  })
+  if (mode !== 'paths') writeCache(root, plan.nextCache)
+
+  process.stdout.write(formatOrders(plan, scope) + '\n')
 }
 
 main()

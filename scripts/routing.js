@@ -1,7 +1,5 @@
 const crypto = require('node:crypto')
 
-const MAX_LISTED_FILES = 40
-
 function auditableFiles(files) {
   const ignored = /(^|\/)(node_modules|dist|build)\//
   return files.filter((f) => /\.tsx?$/.test(f) && !/\.d\.ts$/.test(f) && !ignored.test(f))
@@ -15,108 +13,54 @@ const AUDITOR_OF = {
   react: 'audit-react'
 }
 
-const ALLOW = { block: false, writeCache: false }
+// Every file is listed, never truncated. This text is a command result, not a
+// hook's block reason, so there is no budget to keep it under — and an elided
+// file is a file the dispatched auditor cannot read.
+function formatOrders(plan, scope) {
+  const dispatched = DOMAINS.filter((d) => plan.assignments[d])
+  const blocks = []
+  if (scope) blocks.push(scope)
 
-function gateDecision(ctx) {
-  if (ctx.stopHookActive) return ALLOW
-  if (!ctx.isGitRepo) return ALLOW
-  if (!ctx.isReatomProject) return ALLOW
-  if (!ctx.auditableFiles || ctx.auditableFiles.length === 0) return ALLOW
-  if (!ctx.plan) return ALLOW
-
-  const dispatched = DOMAINS.filter((d) => ctx.plan.assignments[d])
-  // Nothing new to audit, but the pruned cache is still worth persisting.
-  if (dispatched.length === 0) return { block: false, writeCache: true, cache: ctx.plan.nextCache }
-
-  // The one agent-independent skip: the transcript proved this session never
-  // invoked a tool that could touch the working tree, so the diff is not its
-  // work. The cache stays unwritten — the changes stay unmarked and resurface
-  // at the next Stop of a session that did mutate something.
-  if (ctx.sessionMutated === false) {
-    return {
-      block: false,
-      writeCache: false,
-      consultationSkip: [...new Set(dispatched.flatMap((d) => ctx.plan.assignments[d]))]
-    }
+  if (dispatched.length === 0) {
+    blocks.push('Nothing to dispatch — every routed file/domain pair is already audited.')
+  } else {
+    const orders = dispatched.map((domain) =>
+      [
+        `${AUDITOR_OF[domain]} (references/rules-${domain}.md)`,
+        ...plan.assignments[domain].map((f) => `  ${f}`)
+      ].join('\n')
+    )
+    blocks.push(
+      [
+        'Dispatch these auditors IN PARALLEL, one Agent call each, giving each the',
+        'file list under its own name and nothing else:',
+        '',
+        orders.join('\n')
+      ].join('\n')
+    )
   }
 
-  return {
-    block: true,
-    writeCache: true,
-    cache: ctx.plan.nextCache,
-    reason: buildReason(ctx.plan, dispatched)
-  }
-}
-
-function buildReason(plan, dispatched) {
-  const orders = dispatched.map((domain) => {
-    const files = plan.assignments[domain]
-    const listed = files.slice(0, MAX_LISTED_FILES)
-    const rest = files.length > MAX_LISTED_FILES
-      ? [`  …and ${files.length - MAX_LISTED_FILES} more — audit them too`]
-      : []
-    return [
-      `${AUDITOR_OF[domain]} (references/rules-${domain}.md)`,
-      ...listed.map((f) => `  ${f}`),
-      ...rest
-    ].join('\n')
-  })
-
-  const lines = [
-    'Reatom audit required before this session can finish.',
-    '',
-    'TRIAGE FIRST — judge every file listed below from this conversation\'s',
-    'context alone; do not open or inspect the files. The gate reads the git',
-    'diff and cannot tell whose changes these are. Ask of each file:',
-    'did this session change it, directly or through subagents or tools it ran?',
-    '- Changed by this session: keep it in its lists.',
-    '- Certainly not changed by this session (a consultation-only session, or',
-    '  a change made outside it): remove the file from every list below; an',
-    '  auditor whose list becomes empty is not dispatched. The gate will not',
-    '  ask about these changes again, so report the skip to the operator in one',
-    '  line naming the files, and note they can run /reatom-audit <paths>',
-    '  for a one-off check or add the paths to .reatom-gate-ignore to',
-    '  exclude them from the gate permanently.',
-    '- Genuinely unsure: collect every unsure file and ask the operator ONE',
-    '  AskUserQuestion naming them, with two options, "Audit (recommended)"',
-    '  and "Skip". Treat operator-skipped files as certainly-not-changed,',
-    '  report line included. If asking is impossible — the tool is missing or',
-    '  the session is non-interactive — audit them: unsure fails toward audit.',
-    '',
-    'Dispatch these auditors IN PARALLEL, one Agent call each, giving each the',
-    'file list under its own name and nothing else:',
-    '',
-    orders.join('\n'),
-    ''
-  ]
-
+  const diagnostics = []
   const idle = plan.notDispatched.map((d) => AUDITOR_OF[d])
-  if (idle.length > 0) lines.push(`Not dispatched — no matching code: ${idle.join(', ')}`)
+  if (idle.length > 0) diagnostics.push(`Not dispatched — no matching code: ${idle.join(', ')}`)
   const cached = plan.fullyCached.map((d) => AUDITOR_OF[d])
-  if (cached.length > 0) lines.push(`Fully cached — routed but already audited: ${cached.join(', ')}`)
+  if (cached.length > 0) diagnostics.push(`Fully cached — routed but already audited: ${cached.join(', ')}`)
   if (plan.skipped > 0) {
-    lines.push(`Skipped — unchanged since last audit: ${plan.skipped} pair${plan.skipped === 1 ? '' : 's'}`)
+    diagnostics.push(`Skipped — unchanged since last audit: ${plan.skipped} pair${plan.skipped === 1 ? '' : 's'}`)
+  }
+  if (diagnostics.length > 0) blocks.push(diagnostics.join('\n'))
+
+  if (dispatched.length > 0) {
+    blocks.push(
+      [
+        'Then, for every finding: fix it, or dismiss it with a written rationale.',
+        'Finish with a line "Audit: N findings, M fixed, K dismissed" and spell out',
+        'each dismissal and its rationale so the operator can judge it.'
+      ].join('\n')
+    )
   }
 
-  lines.push(
-    '',
-    'Then, for every finding: fix it, or dismiss it with a written rationale.',
-    'Finish with a line "Audit: N findings, M fixed, K dismissed" and spell out',
-    'each dismissal and its rationale so the operator can judge it.'
-  )
-  return lines.join('\n')
-}
-
-const MAX_SKIP_LISTED = 5
-
-function buildSkipMessage(files) {
-  const listed = files.slice(0, MAX_SKIP_LISTED).join(', ')
-  const rest = files.length > MAX_SKIP_LISTED ? ` …and ${files.length - MAX_SKIP_LISTED} more` : ''
-  return (
-    `Reatom gate: ${files.length} changed file${files.length === 1 ? '' : 's'} left unaudited — ` +
-    `this session made no edits. Files: ${listed}${rest}. ` +
-    `Run /reatom-audit <paths> for a one-off check, or add paths to .reatom-gate-ignore to exclude them permanently.`
-  )
+  return blocks.join('\n\n')
 }
 
 const DOMAINS = ['async', 'state', 'lifecycle', 'routing-forms', 'react']
@@ -171,39 +115,6 @@ function parseCache(raw) {
   } catch {
     return {}
   }
-}
-
-const READ_ONLY_TOOLS = new Set([
-  'Read', 'Grep', 'Glob', 'WebSearch', 'WebFetch', 'TodoWrite',
-  'AskUserQuestion', 'ToolSearch', 'EnterPlanMode', 'ExitPlanMode',
-  'TaskCreate', 'TaskGet', 'TaskList', 'TaskOutput', 'TaskStop', 'TaskUpdate'
-])
-
-// A negative proof, not attribution: the question is never "which files did
-// the session change" but "could it have changed anything at all". Anything
-// not provably read-only — Bash, Task, Skill, MCP tools, unknown names, a
-// line that does not parse — flips the answer to yes. A transcript with no
-// recognizable entries at all — nothing shaped like a message with content
-// blocks — also proves nothing and reads as mutated.
-function sessionMutated(raw) {
-  if (typeof raw !== 'string' || raw.trim() === '') return true
-  let recognized = false
-  for (const line of raw.split('\n')) {
-    if (!line.trim()) continue
-    let entry
-    try {
-      entry = JSON.parse(line)
-    } catch {
-      return true
-    }
-    const content = entry && entry.message && entry.message.content
-    if (!Array.isArray(content)) continue
-    recognized = true
-    for (const block of content) {
-      if (block && block.type === 'tool_use' && !READ_ONLY_TOOLS.has(block.name)) return true
-    }
-  }
-  return !recognized
 }
 
 function readIgnorePatterns(raw) {
@@ -320,7 +231,8 @@ function safeRead(fn, fallback) {
 
 module.exports = {
   auditableFiles,
-  gateDecision,
+  AUDITOR_OF,
+  formatOrders,
   DOMAINS,
   SURFACE,
   buildTriggers,
@@ -328,11 +240,7 @@ module.exports = {
   pairKey,
   pairHash,
   parseCache,
-  READ_ONLY_TOOLS,
-  sessionMutated,
   readIgnorePatterns,
   filterIgnored,
-  planAudit,
-  buildSkipMessage
+  planAudit
 }
-

@@ -1,7 +1,7 @@
 # Reatom for Claude Code
 
-A [Reatom v1001](https://v1001.reatom.dev) skill, plus an audit that checks changed
-TypeScript against a rule registry before a session can finish.
+A [Reatom v1001](https://v1001.reatom.dev) skill, plus an audit command that checks
+TypeScript against a rule registry.
 
 ## Install
 
@@ -10,6 +10,19 @@ claude plugin marketplace add khmilevoi/reatom-skill
 claude plugin install reatom@reatom
 ```
 
+Then, once per project that should use the audit:
+
+```
+/reatom-audit init
+```
+
+That writes a short block into the project's `CLAUDE.md`, inside a
+`<reatom-audit>…</reatom-audit>` tag pair, saying when the audit is due — after a change
+that touched Reatom code, before the work is reported as done. Re-running `init` rewrites
+whatever sits between the tags, so a later release's wording lands without the operator
+having to diff anything. Nothing in this plugin fires on its own; that block is the whole
+trigger.
+
 ## What you get
 
 **The skill.** Reatom guidance routed through three sources in order: the rule registry,
@@ -17,43 +30,35 @@ the vendored upstream handbook, and the Reatom your own project installed. When 
 vendored docs and your installed `@reatom/core` disagree, your installed types win — they
 are what your code runs against.
 
-**The audit.** A Stop hook that fires when a session changed TypeScript in a project with
-`@reatom/*` in its `package.json`. It routes each changed file to the domains whose rules
-can fire on it — async, state, lifecycle, routing/forms, React — and dispatches read-only
-auditors, in parallel, only for the domains that still have unaudited work, each reporting
-only violations it can pin to a rule id, a `file:line`, and a named replacement API. Every
-finding is then fixed or dismissed with a written rationale.
+**The audit.** `/reatom-audit` routes each file in scope to the domains whose rules can
+fire on it — async, state, lifecycle, routing/forms, React — and dispatches read-only
+auditors, in parallel, only for the domains that still have unaudited work, each
+reporting only violations it can pin to a rule id, a `file:line`, and a named replacement
+API. Every finding is then fixed or dismissed with a written rationale.
 
-The gate is incremental: it caches which file/domain pairs it has already audited against
-which rule slice, and skips a pair once its cache entry matches. A Stop can pass with no
-auditor dispatched at all when everything routed has already been audited.
+Three scopes:
 
-Three mechanisms keep the gate honest about scope. A `.reatom-gate-ignore`
-file at the project root — gitignore-style globs, `#` comments, no negation —
-permanently excludes paths that are not audit surface, such as test fixtures
-or scanner code that treats Reatom tokens as data. It is yours to maintain:
-the plugin never writes to it, and `/reatom-audit` deliberately does not
-apply it, so a manual audit still reaches excluded paths. Second, the gate
-proves consultation-only sessions innocent mechanically: before blocking, it
-scans the session transcript against an allowlist of read-only tools, and a
-session that never invoked anything that could touch the working tree is
-allowed through silently — the cache stays unwritten so the changes resurface
-in the next working session, and a one-line message tells the operator which
-files were left unaudited. Anything unprovable — a Bash call, a subagent, an
-unreadable transcript — fails closed to a normal block. Third, the block
-reason opens with a triage step: the session judges, from its own
-conversation context and without inspecting files, whether it actually made
-the listed changes. Changes it is certain it did not make are skipped and
-reported to the operator with the follow-ups (`/reatom-audit <paths>`, or an
-ignore entry); files it is genuinely unsure about go to the operator as one
-AskUserQuestion — audit or skip — and unsure still fails toward auditing
-when asking is impossible.
+| Invocation | Scope | Ignore file | Cache |
+| --- | --- | --- | --- |
+| `/reatom-audit` | TypeScript changed against the base branch, plus the working tree | applied | read and written |
+| `/reatom-audit all` | every `.ts`/`.tsx` file in the repository | applied | ignored going in, written coming out |
+| `/reatom-audit <paths>` | exactly the files you name, changed or not | not applied | untouched |
 
-Non-Reatom projects and sessions with no TypeScript change exit silently.
+The changed scope is incremental: it caches which file/domain pairs it has already
+audited against which rule slice and skips a pair once its cache entry matches, so a
+re-run after a small follow-up edit usually dispatches nothing at all. The base branch is
+resolved from `origin/HEAD`, then `main`/`master`/`develop`/`trunk`, then the commit
+graph, and the answer is pinned in `.git/reatom-base-branch` — overwrite that file to
+correct a wrong guess, or write `none` to audit the working tree alone.
 
-Run it by hand against any path with `/reatom-audit [path]`. The gate only ever sees the
-diff, so pre-existing debt is invisible to it; the command is how you point it at code
-that has not changed.
+A diff only ever shows what changed, so pre-existing debt is invisible to the default
+scope. `all` and explicit paths are how you reach it.
+
+`.reatom-audit-ignore` at the project root — gitignore-style globs, `#` comments, no
+negation — permanently excludes paths that are not audit surface, such as test fixtures
+or scanner code that treats Reatom tokens as data. It is yours to maintain: the plugin
+never writes to it. Naming a file on the command line overrides it, so a deliberate audit
+still reaches excluded paths. The pre-0.6 name `.reatom-gate-ignore` is still read.
 
 ## The rules
 

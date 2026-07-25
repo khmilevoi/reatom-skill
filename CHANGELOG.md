@@ -1,5 +1,57 @@
 # Changelog
 
+## 0.6.0
+
+The Stop gate fired on the diff, not on the work. Every mechanism added since
+0.3.0 — the ignore file, the transcript scan, the confidence triage — existed
+to answer one question the hook could not ask itself: is this audit worth
+running right now? None of them fixed the underlying shape, which was that the
+audit interrupted the operator instead of the operator invoking the audit. This
+release deletes the hook and gives the judgement to the agent, which has the
+session's context and can answer that question directly.
+
+### Added
+
+- **`/reatom-audit all`** — audits every `.ts`/`.tsx` file in the repository,
+  changed or not. The cache is not read, so nothing is skipped; it is written
+  afterwards, so the next `/reatom-audit` starts current.
+- **`/reatom-audit init`** — writes the "when to run this" block into the
+  project's `CLAUDE.md`, inside a `<reatom-audit>…</reatom-audit>` tag pair.
+  Creates the file, appends the block, or rewrites whatever sits between
+  existing tags — the tags themselves are never touched, so a later release's
+  wording lands on a re-run without the operator diffing anything. A file with
+  an unclosed tag or two blocks is refused rather than guessed at. This block
+  is now the plugin's only trigger.
+
+### Changed
+
+- **`/reatom-audit` with no arguments** now audits the changed scope the Stop
+  gate used to — `merge-base(HEAD, <base>)..HEAD` plus the working tree — and,
+  unlike in 0.5.0, it is incremental and applies the ignore file. Explicit paths
+  still bypass both, because naming a file is the whole point of naming it.
+- **`.reatom-gate-ignore` is now `.reatom-audit-ignore`.** The old name is still
+  read, so nothing breaks; only the first file found is used.
+- **The dispatch orders no longer truncate at 40 files per auditor.** That cap
+  kept a Stop block reason short; a command result has no such budget, and an
+  elided file is a file the auditor cannot read.
+- **`hooks/` is now `scripts/`,** and `gate-logic.js` is `routing.js`. The
+  directory name was a Claude Code convention that would have meant the
+  opposite of the truth.
+- **A missing rule registry is now an error**, not a silent pass. A hook that
+  cannot audit should get out of the way; a command that cannot audit should say
+  so.
+
+### Removed
+
+- **The Stop hook.** `hooks/hooks.json` and `hooks/reatom-gate.js` are gone.
+  No session is blocked, no session is interrupted.
+- **The transcript scan** (`sessionMutated`, the read-only tool allowlist, the
+  consultation-skip message) and **the triage protocol** in the block reason.
+  Both existed to guess whether the diff belonged to the session. An invoked
+  command has an operator behind it and nothing to guess at.
+- **The `@reatom/*` project check.** It kept the hook quiet in unrelated repos;
+  refusing an explicitly invoked command would only be in the way.
+
 ## 0.5.0
 
 A consultation-only session — one that answered questions and never invoked

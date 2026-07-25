@@ -1,47 +1,54 @@
 ---
-description: Audit Reatom code against the rule registry by dispatching exactly the read-only domain auditors the router names for the given paths
+description: Audit Reatom code against the rule registry by dispatching exactly the read-only domain auditors the router names — changed files by default, "all" for the whole repository, explicit paths, or "init" to write the when-to-run block into CLAUDE.md
 ---
 
-Audit Reatom code in this repository against `${CLAUDE_PLUGIN_ROOT}/skills/reatom/references/rules.md`.
+Audit Reatom code in this repository against
+`${CLAUDE_PLUGIN_ROOT}/skills/reatom/references/rules.md`.
+
+## Pick the mode from `$ARGUMENTS`
+
+| `$ARGUMENTS` | Run |
+| --- | --- |
+| empty | `node "${CLAUDE_PLUGIN_ROOT}/scripts/route.js" --changed` |
+| `all` | `node "${CLAUDE_PLUGIN_ROOT}/scripts/route.js" --all` |
+| `init` | `node "${CLAUDE_PLUGIN_ROOT}/scripts/init-claude-md.js"` |
+| anything else | `node "${CLAUDE_PLUGIN_ROOT}/scripts/route.js" <the arguments, verbatim>` |
+
+`init` is not an audit. It writes the "when to run this" block into the project's
+`CLAUDE.md`, inside a `<reatom-audit>…</reatom-audit>` tag pair, creating the file
+if it is missing and rewriting whatever sits between the tags if it is not. Report
+what the script printed and stop — there is nothing to dispatch.
 
 ## Scope
 
-Use `$ARGUMENTS` when given — one or more literal `.ts`/`.tsx` file paths. The router
-does not expand globs or directories; anything else in the list is silently dropped.
-With no arguments, audit the same set the Stop gate would: changed TypeScript across
-`merge-base(HEAD, <base>)..HEAD` plus the working tree. The gate resolves `<base>`
-itself — `origin/HEAD`, then `main`/`master`/`develop`/`trunk`, then the branch with
-the youngest merge-base against `HEAD` — and pins the answer in
-`.git/reatom-base-branch`. Read that file to see which branch is in use; overwrite it
-to correct a wrong guess, or write `none` to audit the working tree alone.
+**No arguments** — TypeScript changed across `merge-base(HEAD, <base>)..HEAD` plus
+the working tree. The router resolves `<base>` itself — `origin/HEAD`, then
+`main`/`master`/`develop`/`trunk`, then the branch with the youngest merge-base
+against `HEAD` — and pins the answer in `.git/reatom-base-branch`. Read that file
+to see which branch is in use; overwrite it to correct a wrong guess, or write
+`none` to audit the working tree alone. This mode is incremental: it skips every
+file/domain pair whose contents and rule slice are unchanged since the last run.
 
-Unlike the gate, you may be pointed at code that has not changed. That is the
-point of this command: the gate only ever sees the diff, so pre-existing debt is
-invisible to it.
+**`all`** — every `.ts`/`.tsx` file in the repository, changed or not. The cache is
+not consulted, so this re-audits everything; it is written afterwards, so a
+following `/reatom-audit` starts from a clean slate.
 
-`.reatom-gate-ignore` is not applied here either. The gate drops those paths;
-this command exists to audit code the gate skips, so an explicit manual
-invocation still reaches them.
+**Explicit paths** — literal `.ts`/`.tsx` file paths. The router does not expand
+globs or directories; anything else in the list is silently dropped. The cache is
+neither read nor written, so a named file is always audited.
+
+`.reatom-audit-ignore` at the project root (the pre-0.6 name `.reatom-gate-ignore`
+still works) excludes paths from the changed and `all` scopes. It is deliberately
+not applied to explicit paths — you named those files, so you get them.
 
 ## Run
 
-Get the dispatch orders first — the router decides which auditors can fire on
-which files, using the same code the Stop gate uses:
+Get the dispatch orders first. The router decides which auditors can fire on which
+files; do not decide that yourself.
 
-```bash
-node "${CLAUDE_PLUGIN_ROOT}/hooks/route.js" <paths…>
-```
-
-With no paths, pass the changed set the gate would use: TypeScript across
-`merge-base(HEAD, <base>)..HEAD` plus the working tree, where `<base>` is the ref
-pinned in `.git/reatom-base-branch`.
-
-Dispatch exactly the auditors the router names, IN PARALLEL, one Agent call each,
-giving each one only the files listed under its own name and the slice it names.
-
-This command audits everything you point it at — it is not incremental. The gate
-caches files it has already seen; this command exists to inspect code the gate
-never does, including unchanged files.
+Dispatch exactly the auditors it names, IN PARALLEL, one Agent call each, giving
+each one only the files listed under its own name and the slice it names. An
+auditor the router did not name has no matching code and must not be dispatched.
 
 ## Report
 

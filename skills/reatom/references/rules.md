@@ -16,7 +16,7 @@ two drift.
 - `hygiene` — traceability and subscription discipline
 
 `trigger` is a comma-separated list of literal, **case-sensitive** substrings. The
-gate's router (`hooks/gate-logic.js`) tests each one with plain `String.includes`
+router (`scripts/routing.js`) tests each one with plain `String.includes`
 against a file's raw text — there is no tokenizing, word-boundary matching, or
 case-folding. `isLoading` does not match `isBalanceLoading`, and `useEffect` does
 not match `UseEffect`. Triggers are deliberately wide: a token that also fires on

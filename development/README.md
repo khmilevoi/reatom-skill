@@ -46,11 +46,12 @@ byte-for-byte. Edit `rules.md` and re-run `build-slices` instead.
 npm test
 ```
 
-- `gate.test.js` — the Stop gate's logic, including integration tests over real git
-  repos. This is the only executable code in the plugin, and it can wedge a session
-  shut, so it carries the most tests.
+- `routing.test.js` — everything under `scripts/`: the router's three scopes, base-branch
+  detection, the audit cache, the ignore file, and the `CLAUDE.md` initializer, with
+  integration tests over real git repos. This is the only executable code in the plugin,
+  so it carries the most tests.
 - `consistency.test.js` — the string bindings between markdown files. There is no
-  compiler here: `gate-logic.js` names auditors by string, auditors name domains by
+  compiler here: `routing.js` names auditors by string, auditors name domains by
   string, and rules name reference anchors by string. These tests are what a compiler
   would otherwise do.
 
