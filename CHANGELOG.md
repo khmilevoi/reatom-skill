@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.2
+
+### Added
+
+- **`argument-hint` on `/reatom-audit`** — `[all | init | <paths…>]`, shown in
+  the `/` menu during autocomplete. The modes existed since 0.6.0 but were
+  documented only in the command body, which the operator reads after typing
+  rather than before; a mode nobody sees is a mode nobody uses.
+
 ## 0.6.1
 
 ### Fixed

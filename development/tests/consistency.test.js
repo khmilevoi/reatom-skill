@@ -385,6 +385,17 @@ test('the command names every mode and routes each through a real script', () =>
   )
 })
 
+// The hint is what the operator reads in the `/` menu before typing anything.
+// A mode the command supports but the hint omits is a mode nobody discovers.
+test('the argument hint advertises every mode the command accepts', () => {
+  const command = fs.readFileSync(path.join(ROOT, 'commands', 'reatom-audit.md'), 'utf8')
+  const hint = (command.match(/^argument-hint:\s*(.+)$/m) || [])[1]
+  assert.ok(hint, 'the command declares an argument-hint')
+  for (const mode of ['all', 'init', 'paths']) {
+    assert.ok(hint.includes(mode), `the hint names ${mode}`)
+  }
+})
+
 test('every script the command names exists', () => {
   for (const name of ['route.js', 'init-claude-md.js', 'routing.js']) {
     assert.ok(fs.existsSync(path.join(ROOT, 'scripts', name)), `scripts/${name} exists`)

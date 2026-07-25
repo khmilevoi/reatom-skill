@@ -1,5 +1,6 @@
 ---
 description: Audit Reatom code against the rule registry by dispatching exactly the read-only domain auditors the router names — changed files by default, "all" for the whole repository, explicit paths, or "init" to write the when-to-run block into CLAUDE.md
+argument-hint: "[all | init | <paths…>]"
 ---
 
 Audit Reatom code in this repository against
