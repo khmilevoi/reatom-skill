@@ -420,7 +420,7 @@ const DEV_CLONE = path.join(__dirname, '..', 'upstream', 'reatom')
 // The dev clone is the same ref the plugin tells operators to clone, so it is
 // the only checkout available to verify the map against.
 function monorepoPaths(text) {
-  const found = text.match(/`(packages|docs|examples)\/[\w./*-]+`/g) || []
+  const found = text.match(/`(packages|docs|examples)(\/[\w./*-]+)?`/g) || []
   return [...new Set(found.map((s) => s.slice(1, -1)))]
 }
 
