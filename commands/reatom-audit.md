@@ -23,7 +23,7 @@ Audit Reatom code in this repository against
 2. Clones `reatom/reatom@v1001` into this machine's cache directory (or updates it if
    it is already there — shallow, single-branch, about 29 MB) and pins the path in
    `.git/.reatom-plugin/sources`, so the skill can read implementations, tests and
-   examples instead of a bundled `.d.ts`.
+   examples instead of an installed `.d.ts`.
 
 The `CLAUDE.md` block is written even with no network. If either job fails the script
 says which one and exits non-zero. Report what it printed and stop — there is nothing
@@ -37,9 +37,11 @@ the working tree. The router resolves `<base>` itself — `origin/HEAD`, then
 against `HEAD` — and pins the answer in `.git/.reatom-plugin/base-branch`. Read that file
 to see which branch is in use; overwrite it to correct a wrong guess, or write
 `none` to audit the working tree alone. State from before 0.7 lived flat in
-`.git/reatom-base-branch` and `.git/reatom-audit-last`; those names are still read, and
-the first write moves each to `.git/.reatom-plugin/`. This mode is incremental: it skips
-every file/domain pair whose contents and rule slice are unchanged since the last run.
+`.git/reatom-base-branch` and `.git/reatom-audit-last`; those names are still read, but
+the first write lands in `.git/.reatom-plugin/` instead — the old file is left exactly
+where it is, simply never consulted again once the new one exists. This mode is
+incremental: it skips every file/domain pair whose contents and rule slice are
+unchanged since the last run.
 
 **`all`** — every `.ts`/`.tsx` file in the repository, changed or not. The cache is
 not consulted, so this re-audits everything; it is written afterwards, so a

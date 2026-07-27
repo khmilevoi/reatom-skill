@@ -2,13 +2,18 @@
 
 ## 0.7.0
 
-- `/reatom-audit init` now clones `reatom/reatom@v1001` into the machine cache and pins
-  the path per project, so the skill reads implementations, tests, docs and examples
-  instead of a published `.d.ts`. The `CLAUDE.md` block is still written when the clone
-  fails; both outcomes are reported and a partial failure exits non-zero.
-- `node scripts/sources.js` reports the checkout's path, ref and age, or says how to
+### Added
+
+- **`/reatom-audit init` now clones `reatom/reatom@v1001`** into the machine cache and
+  pins the path per project, so the skill reads implementations, tests, docs and
+  examples instead of an installed `.d.ts`. The `CLAUDE.md` block is still written when
+  the clone fails; both outcomes are reported and a partial failure exits non-zero.
+- **`node scripts/sources.js`** reports the checkout's path, ref and age, or says how to
   create it. Nothing updates the clone on its own — `init` is the only fetch.
-- Project state moved from flat `.git/reatom-*` files into `.git/.reatom-plugin/`
+
+### Changed
+
+- **Project state moved from flat `.git/reatom-*` files into `.git/.reatom-plugin/`**
   (`base-branch`, `audit-last`, `sources`). The old names are still read.
 
 ## 0.6.2

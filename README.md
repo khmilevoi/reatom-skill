@@ -25,11 +25,11 @@ that block is the whole trigger.
 
 ## What you get
 
-**The skill.** Reatom guidance routed through three sources in order: the rule registry,
-the vendored upstream handbook, and the Reatom your own project installed. When the
-vendored docs and your installed `@reatom/core` disagree, your installed types win — they
-are what your code runs against. Between them sits the upstream checkout, which explains
-how the code works but tracks `v1001` branch HEAD, not your release.
+**The skill.** Reatom guidance routed through four sources, in order: the rule registry,
+the vendored upstream handbook, the upstream checkout on this machine, and the Reatom
+your own project installed. The checkout explains how the code works but tracks `v1001`
+branch HEAD, not your release; when the vendored docs and your installed `@reatom/core`
+disagree, your installed types win — they are what your code runs against.
 
 **The audit.** `/reatom-audit` routes each file in scope to the domains whose rules can
 fire on it — async, state, lifecycle, routing/forms, React — and dispatches read-only
@@ -62,7 +62,7 @@ loses nothing.
 `${XDG_CACHE_HOME:-~/.cache}/reatom-claude-plugin/sources` elsewhere — shallow,
 single-branch, about 29 MB, one clone for every project) and pins the path in
 `.git/.reatom-plugin/sources`. The skill reads implementations, tests, docs and
-examples from there instead of from a published `.d.ts`. Nothing updates that clone
+examples from there instead of from an installed `.d.ts`. Nothing updates that clone
 on its own: re-run `init` to fetch. Point the pin at your own Reatom checkout to work
 against it, or write `none` to keep the skill on `node_modules` alone.
 
