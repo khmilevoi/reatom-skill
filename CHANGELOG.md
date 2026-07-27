@@ -7,7 +7,9 @@
 - **`/reatom-audit init` now clones `reatom/reatom@v1001`** into the machine cache and
   pins the path per project, so the skill reads implementations, tests, docs and
   examples instead of an installed `.d.ts`. The `CLAUDE.md` block is still written when
-  the clone fails; both outcomes are reported and a partial failure exits non-zero.
+  the clone fails; both outcomes are reported and a partial failure exits non-zero. The
+  checkout is shallow and single-branch and leaves upstream's Git LFS fixtures as
+  pointers, which keeps it near 55 MB instead of 500 MB.
 - **`node scripts/sources.js`** reports the checkout's path, ref and age, or says how to
   create it. Nothing updates the clone on its own — `init` is the only fetch.
 

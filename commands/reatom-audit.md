@@ -21,7 +21,8 @@ Audit Reatom code in this repository against
    `<!-- reatom-audit -->` and `<!-- /reatom-audit -->`, creating the file if it is
    missing and rewriting whatever sits between those delimiters if it is not.
 2. Clones `reatom/reatom@v1001` into this machine's cache directory (or updates it if
-   it is already there — shallow, single-branch, about 29 MB) and pins the path in
+   it is already there — shallow, single-branch, LFS pointers left unsmudged, about
+   55 MB) and pins the path in
    `.git/.reatom-plugin/sources`, so the skill can read implementations, tests and
    examples instead of an installed `.d.ts`. This only ever touches an `auto` pin or no
    pin at all — a bare pin is the operator's word, so a hand-written checkout path and a

@@ -60,10 +60,13 @@ loses nothing.
 `/reatom-audit init` also clones `reatom/reatom@v1001` into this machine's cache
 (`%LOCALAPPDATA%\reatom-claude-plugin\sources` on Windows,
 `${XDG_CACHE_HOME:-~/.cache}/reatom-claude-plugin/sources` elsewhere — shallow,
-single-branch, about 29 MB, one clone shared by every project) and pins the path in
+single-branch, about 55 MB, one clone shared by every project) and pins the path in
 `.git/.reatom-plugin/sources`. The skill reads implementations, tests, docs and
-examples from there instead of from an installed `.d.ts`. Nothing updates that clone
-on its own: re-run `init` to fetch. Point the pin at your own Reatom checkout to work
+examples from there instead of from an installed `.d.ts`. Upstream keeps one example
+app's raw camera fixtures in Git LFS; the clone leaves those as pointers, because the
+skill reads code and fetching them would cost another 440 MB — run `git lfs pull` in
+the checkout if you ever want the originals. Nothing updates that clone on its own:
+re-run `init` to fetch. Point the pin at your own Reatom checkout to work
 against it, or write `none` to keep the skill on `node_modules` alone.
 
 A diff only ever shows what changed, so pre-existing debt is invisible to the default

@@ -200,7 +200,7 @@ test('integration: the CLI exits 1 and says why when there is no clone', () => {
   assert.match(out.stdout, /\/reatom-audit init/)
 })
 
-const { ensureSources, REMOTE } = require('../../scripts/sources')
+const { ensureSources, gitEnv, REMOTE } = require('../../scripts/sources')
 
 function recorder(status = 0, stderr = '') {
   const calls = []
@@ -358,4 +358,17 @@ test('integration: init leaves a "none" sources pin alone and clones nothing', (
     false,
     'the refused 29 MB was never fetched'
   )
+})
+
+test('git runs with LFS smudging off, and otherwise inherits the environment', () => {
+  const env = gitEnv({ PATH: '/usr/bin', HOME: '/home/a' })
+  assert.equal(env.GIT_LFS_SKIP_SMUDGE, '1')
+  assert.equal(env.PATH, '/usr/bin', 'the real environment still reaches git')
+  assert.equal(env.HOME, '/home/a')
+})
+
+test('the LFS override does not mutate the environment it is given', () => {
+  const source = { PATH: '/usr/bin' }
+  gitEnv(source)
+  assert.equal(source.GIT_LFS_SKIP_SMUDGE, undefined, 'process.env is not ours to edit')
 })

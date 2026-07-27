@@ -17,7 +17,7 @@ const CACHE_NAMESPACE = 'reatom-claude-plugin'
 const CLONE_LEAF = 'sources'
 
 // One clone per machine, in the OS cache location, because nothing about it is
-// project-specific: every project wants the same 29 MB of reatom@v1001.
+// project-specific: every project wants the same checkout of reatom@v1001.
 function defaultSourcesPath(env = process.env, platform = process.platform) {
   const base = platform === 'win32'
     ? env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local')
@@ -143,8 +143,19 @@ function report(cwd, deps = {}) {
   }
 }
 
+// Upstream tracks one example app's raw camera fixtures — CR2, NEF and JPG
+// files of 25-29 MB each — through Git LFS. In the tree they are 133-byte
+// pointers, so every size measured with `git ls-tree` misses them entirely;
+// on checkout the smudge filter fetches the real thing and the clone lands at
+// ~500 MB instead of ~55 MB. The skill reads code, tests, docs and example
+// sources, never photographs, so the pointers stay pointers. Anyone who wants
+// the originals runs `git lfs pull` in the checkout.
+function gitEnv(env = process.env) {
+  return { ...env, GIT_LFS_SKIP_SMUDGE: '1' }
+}
+
 function spawnGitStatus(cwd, args) {
-  const r = spawnSync('git', args, { cwd, encoding: 'utf8' })
+  const r = spawnSync('git', args, { cwd, encoding: 'utf8', env: gitEnv() })
   if (r.error) return { status: 1, stderr: `git could not be run: ${r.error.message}` }
   return { status: r.status === null ? 1 : r.status, stderr: r.stderr || '' }
 }
@@ -157,10 +168,10 @@ function run(runGit, cwd, args) {
   }
 }
 
-// --depth 1 --single-branch is the difference between 29 MB and 300 MB: the
-// tracked tree at v1001 is 29.3 MB, the full history is 271 MB. No sparse
-// checkout — docs/ and examples/ are two of the three things the clone exists
-// to provide.
+// --depth 1 --single-branch is the difference between one 24 MB pack and 271 MB
+// of history. With LFS smudging off (see gitEnv) the checkout costs about
+// 55 MB. No sparse checkout — docs/ and examples/ are two of the three things
+// the clone exists to provide.
 //
 // Update is fetch + hard reset, never pull: the clone is a read-only mirror
 // nobody commits to, and a merge is a state this has no business entering.
@@ -190,6 +201,7 @@ module.exports = {
   SOURCES_STATE,
   NO_SOURCES,
   defaultSourcesPath,
+  gitEnv,
   resolveSources,
   describeClone,
   ageInDays,
