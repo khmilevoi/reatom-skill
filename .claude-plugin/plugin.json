@@ -1,5 +1,5 @@
 {
   "name": "reatom",
   "description": "Reatom v1001 skill plus a /reatom-audit command that checks TypeScript against the rule registry",
-  "version": "0.6.2"
+  "version": "0.7.0"
 }

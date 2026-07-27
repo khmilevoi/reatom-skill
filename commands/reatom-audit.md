@@ -15,20 +15,31 @@ Audit Reatom code in this repository against
 | `init` | `node "${CLAUDE_PLUGIN_ROOT}/scripts/init.js"` |
 | anything else | `node "${CLAUDE_PLUGIN_ROOT}/scripts/route.js" <the arguments, verbatim>` |
 
-`init` is not an audit. It writes the "when to run this" block into the project's
-`CLAUDE.md`, between `<!-- reatom-audit -->` and `<!-- /reatom-audit -->`, creating
-the file if it is missing and rewriting whatever sits between those delimiters if
-it is not. Report what the script printed and stop — there is nothing to dispatch.
+`init` is not an audit. It does two independent things and reports both:
+
+1. Writes the "when to run this" block into the project's `CLAUDE.md`, between
+   `<!-- reatom-audit -->` and `<!-- /reatom-audit -->`, creating the file if it is
+   missing and rewriting whatever sits between those delimiters if it is not.
+2. Clones `reatom/reatom@v1001` into this machine's cache directory (or updates it if
+   it is already there — shallow, single-branch, about 29 MB) and pins the path in
+   `.git/.reatom-plugin/sources`, so the skill can read implementations, tests and
+   examples instead of a bundled `.d.ts`.
+
+The `CLAUDE.md` block is written even with no network. If either job fails the script
+says which one and exits non-zero. Report what it printed and stop — there is nothing
+to dispatch.
 
 ## Scope
 
 **No arguments** — TypeScript changed across `merge-base(HEAD, <base>)..HEAD` plus
 the working tree. The router resolves `<base>` itself — `origin/HEAD`, then
 `main`/`master`/`develop`/`trunk`, then the branch with the youngest merge-base
-against `HEAD` — and pins the answer in `.git/reatom-base-branch`. Read that file
+against `HEAD` — and pins the answer in `.git/.reatom-plugin/base-branch`. Read that file
 to see which branch is in use; overwrite it to correct a wrong guess, or write
-`none` to audit the working tree alone. This mode is incremental: it skips every
-file/domain pair whose contents and rule slice are unchanged since the last run.
+`none` to audit the working tree alone. State from before 0.7 lived flat in
+`.git/reatom-base-branch` and `.git/reatom-audit-last`; those names are still read, and
+the first write moves each to `.git/.reatom-plugin/`. This mode is incremental: it skips
+every file/domain pair whose contents and rule slice are unchanged since the last run.
 
 **`all`** — every `.ts`/`.tsx` file in the repository, changed or not. The cache is
 not consulted, so this re-audits everything; it is written afterwards, so a

@@ -28,7 +28,8 @@ that block is the whole trigger.
 **The skill.** Reatom guidance routed through three sources in order: the rule registry,
 the vendored upstream handbook, and the Reatom your own project installed. When the
 vendored docs and your installed `@reatom/core` disagree, your installed types win — they
-are what your code runs against.
+are what your code runs against. Between them sits the upstream checkout, which explains
+how the code works but tracks `v1001` branch HEAD, not your release.
 
 **The audit.** `/reatom-audit` routes each file in scope to the domains whose rules can
 fire on it — async, state, lifecycle, routing/forms, React — and dispatches read-only
@@ -48,8 +49,22 @@ The changed scope is incremental: it caches which file/domain pairs it has alrea
 audited against which rule slice and skips a pair once its cache entry matches, so a
 re-run after a small follow-up edit usually dispatches nothing at all. The base branch is
 resolved from `origin/HEAD`, then `main`/`master`/`develop`/`trunk`, then the commit
-graph, and the answer is pinned in `.git/reatom-base-branch` — overwrite that file to
-correct a wrong guess, or write `none` to audit the working tree alone.
+graph, and the answer is pinned in `.git/.reatom-plugin/base-branch` — overwrite that file
+to correct a wrong guess, or write `none` to audit the working tree alone.
+
+Everything the plugin remembers about a project lives in `.git/.reatom-plugin/` —
+`base-branch`, `audit-last`, and `sources`. The pre-0.7 flat names
+`.git/reatom-base-branch` and `.git/reatom-audit-last` are still read, so an upgrade
+loses nothing.
+
+`/reatom-audit init` also clones `reatom/reatom@v1001` into this machine's cache
+(`%LOCALAPPDATA%\reatom-claude-plugin\sources` on Windows,
+`${XDG_CACHE_HOME:-~/.cache}/reatom-claude-plugin/sources` elsewhere — shallow,
+single-branch, about 29 MB, one clone for every project) and pins the path in
+`.git/.reatom-plugin/sources`. The skill reads implementations, tests, docs and
+examples from there instead of from a published `.d.ts`. Nothing updates that clone
+on its own: re-run `init` to fetch. Point the pin at your own Reatom checkout to work
+against it, or write `none` to keep the skill on `node_modules` alone.
 
 A diff only ever shows what changed, so pre-existing debt is invisible to the default
 scope. `all` and explicit paths are how you reach it.
