@@ -195,3 +195,63 @@ test('integration: the CLI exits 1 and says why when there is no clone', () => {
   assert.equal(out.status, 1)
   assert.match(out.stdout, /\/reatom-audit init/)
 })
+
+const { ensureSources, REMOTE } = require('../../scripts/sources')
+
+function recorder(status = 0, stderr = '') {
+  const calls = []
+  return {
+    calls,
+    runGit: (cwd, args) => {
+      calls.push({ cwd, args })
+      return { status, stderr }
+    }
+  }
+}
+
+test('a fresh machine gets a shallow, single-branch clone of the pinned ref', () => {
+  const parent = fs.mkdtempSync(path.join(os.tmpdir(), 'reatom-ensure-'))
+  const target = path.join(parent, 'sources')
+  const rec = recorder()
+  const r = ensureSources({ target, runGit: rec.runGit })
+
+  assert.equal(r.action, 'cloned')
+  assert.equal(r.path, target)
+  assert.equal(rec.calls.length, 1)
+  assert.deepEqual(rec.calls[0].args, [
+    'clone', '--depth', '1', '--single-branch', '-b', 'v1001', REMOTE, target
+  ])
+})
+
+test('an existing clone is fetched and hard-reset, never merged', () => {
+  const target = makeClone()
+  const rec = recorder()
+  const r = ensureSources({ target, runGit: rec.runGit })
+
+  assert.equal(r.action, 'updated')
+  assert.deepEqual(rec.calls.map((c) => c.args), [
+    ['fetch', '--depth', '1', 'origin', 'v1001'],
+    ['reset', '--hard', 'FETCH_HEAD']
+  ])
+  assert.equal(rec.calls[0].cwd, target, 'the update runs inside the clone')
+})
+
+test('a failing git command throws with the command and its stderr', () => {
+  const parent = fs.mkdtempSync(path.join(os.tmpdir(), 'reatom-ensure-fail-'))
+  const rec = recorder(128, 'fatal: unable to access ... Could not resolve host\n')
+  assert.throws(
+    () => ensureSources({ target: path.join(parent, 'sources'), runGit: rec.runGit }),
+    (e) => {
+      assert.match(e.message, /git clone/)
+      assert.match(e.message, /128/)
+      assert.match(e.message, /Could not resolve host/)
+      return true
+    }
+  )
+})
+
+test('ensureSources defaults to the machine cache path when given no target', () => {
+  const rec = recorder()
+  const r = ensureSources({ runGit: rec.runGit, exists: () => false, mkdir: () => {} })
+  assert.equal(r.path, defaultSourcesPath())
+})

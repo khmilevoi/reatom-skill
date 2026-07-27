@@ -143,6 +143,46 @@ function report(cwd, deps = {}) {
   }
 }
 
+function spawnGitStatus(cwd, args) {
+  const r = spawnSync('git', args, { cwd, encoding: 'utf8' })
+  return { status: r.status === null ? 1 : r.status, stderr: r.stderr || '' }
+}
+
+function run(runGit, cwd, args) {
+  const r = runGit(cwd, args)
+  if (r.status !== 0) {
+    const detail = (r.stderr || '').trim().split('\n').pop() || 'no output'
+    throw new Error(`git ${args[0]} failed (exit ${r.status}): ${detail}`)
+  }
+}
+
+// --depth 1 --single-branch is the difference between 29 MB and 300 MB: the
+// tracked tree at v1001 is 29.3 MB, the full history is 271 MB. No sparse
+// checkout — docs/ and examples/ are two of the three things the clone exists
+// to provide.
+//
+// Update is fetch + hard reset, never pull: the clone is a read-only mirror
+// nobody commits to, and a merge is a state this has no business entering.
+function ensureSources({
+  target,
+  runGit = spawnGitStatus,
+  exists = fs.existsSync,
+  mkdir = (dir) => fs.mkdirSync(dir, { recursive: true })
+} = {}) {
+  const dest = target || defaultSourcesPath()
+
+  if (isClone(dest, exists)) {
+    run(runGit, dest, ['fetch', '--depth', '1', 'origin', REF])
+    run(runGit, dest, ['reset', '--hard', 'FETCH_HEAD'])
+    return { action: 'updated', path: dest }
+  }
+
+  const parent = path.dirname(dest)
+  mkdir(parent)
+  run(runGit, parent, ['clone', '--depth', '1', '--single-branch', '-b', REF, REMOTE, dest])
+  return { action: 'cloned', path: dest }
+}
+
 module.exports = {
   REF,
   REMOTE,
@@ -152,7 +192,8 @@ module.exports = {
   resolveSources,
   describeClone,
   ageInDays,
-  report
+  report,
+  ensureSources
 }
 
 if (require.main === module) {
