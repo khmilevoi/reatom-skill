@@ -412,3 +412,30 @@ test('route.js prints per-auditor orders for a real file', () => {
   assert.match(out.stdout, /audit-lifecycle \(references\/rules-lifecycle\.md\)/)
   assert.match(out.stdout, /polling-timer\.ts/)
 })
+
+const SKILL = path.join(__dirname, '..', '..', 'skills', 'reatom', 'SKILL.md')
+const DEV_CLONE = path.join(__dirname, '..', 'upstream', 'reatom')
+
+// Every backticked path in SKILL.md that points into the upstream monorepo.
+// The dev clone is the same ref the plugin tells operators to clone, so it is
+// the only checkout available to verify the map against.
+function monorepoPaths(text) {
+  const found = text.match(/`(packages|docs|examples)\/[\w./*-]+`/g) || []
+  return [...new Set(found.map((s) => s.slice(1, -1)))]
+}
+
+test('every monorepo path named in SKILL.md exists upstream', { skip: !fs.existsSync(DEV_CLONE) && 'no dev clone' }, () => {
+  const paths = monorepoPaths(fs.readFileSync(SKILL, 'utf8'))
+  assert.ok(paths.length >= 5, `the source map should name several paths, found ${paths.length}`)
+  for (const p of paths) {
+    // A trailing /*.test.ts style glob is a pattern, not a path; check its directory.
+    const probe = p.includes('*') ? path.dirname(p) : p
+    assert.ok(fs.existsSync(path.join(DEV_CLONE, probe)), `SKILL.md names ${p}, which is not in the clone`)
+  }
+})
+
+test('SKILL.md tells the agent how to find the sources before naming paths in them', () => {
+  const text = fs.readFileSync(SKILL, 'utf8')
+  assert.match(text, /scripts[\\/]sources\.js/, 'the resolver is how the path is learned')
+  assert.match(text, /\/reatom-audit init/, 'and init is what creates it')
+})

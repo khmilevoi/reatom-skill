@@ -7,9 +7,10 @@ description: "Use when working with Reatom v1001 (`@reatom/core@1001`), includin
 
 ## Overview
 
-This skill routes Reatom v1001 work through three sources, in order: our defaults in
-`references/rules.md`, the vendored upstream handbook in `references/upstream/`, and
-the Reatom the project actually installed in its own `node_modules`.
+This skill routes Reatom v1001 work through four sources, in order: our defaults in
+`references/rules.md`, the vendored upstream handbook in `references/upstream/`, the
+full upstream checkout on this machine, and the Reatom the project actually installed
+in its own `node_modules`.
 
 ## When To Use
 
@@ -29,31 +30,44 @@ Use this skill when the task mentions any of the following:
 
 ## Workflow
 
+0. Locate the upstream checkout once per session:
+   `node "${CLAUDE_PLUGIN_ROOT}/scripts/sources.js"`. It prints the path, the ref and
+   the age of the checkout, or says it is not there. If it is not there, work exactly
+   as steps 1-2 describe and mention once — not repeatedly — that `/reatom-audit init`
+   would provide it. The sources are an upgrade, never a prerequisite.
 1. Apply `references/rules.md`. It is policy and it is binding.
 2. Answer from the smallest matching section of `references/upstream/`.
-3. For API detail the handbook does not settle, read the project's own
-   `node_modules/@reatom/*` — see Source Map.
-4. Prefer the Reatom-native shape over generic React state patterns.
-5. Keep answers concise, but call out best practices, anti-patterns, and tricky parts
-   explicitly, citing the section you used.
+3. For anything the handbook does not settle, read the upstream sources — see Source
+   Map. That is where implementations, tests and examples are.
+4. Confirm the installed version from the project's own `node_modules` when the answer
+   depends on it — see Source Precedence.
+5. Prefer the Reatom-native shape over generic React state patterns.
+6. Keep answers concise, but call out best practices, anti-patterns, and tricky parts
+   explicitly, citing the section or file you used.
 
 ## Source Precedence
 
-The vendored handbook is a point-in-time copy. The project's `node_modules` is what its
-code actually runs against.
+The vendored handbook is a point-in-time excerpt. The upstream checkout is the whole
+story at `v1001`. The project's `node_modules` is what its code actually runs against.
 
-**When `references/upstream/` and the installed `.d.ts` disagree, the installed `.d.ts`
-wins.** Check `@reatom/core`'s version in the project's `package.json` against
-`references/upstream/VERSION`, and say so out loud when the major differs. If the project
-has no `node_modules/@reatom/*`, say the version could not be confirmed rather than
-guessing.
+**The checkout explains how Reatom works; the installed package settles what this
+project has.** When the installed `.d.ts` and the checkout disagree, the `.d.ts` wins —
+the checkout is branch HEAD and may be ahead of the release the project uses. Check
+`@reatom/core`'s version in the project's `package.json` against
+`references/upstream/VERSION`, and say so out loud when the major differs. If the
+project has no `node_modules/@reatom/*`, say the version could not be confirmed rather
+than guessing.
+
+The checkout's age is printed by the resolver on every lookup. Nothing updates it on
+its own — `/reatom-audit init` is the only thing that fetches. If it is months old and
+the question is about recent behavior, say so instead of quoting it as current.
 
 `references/rules.md` states policy, not API facts, so it does not conflict with the
 types and stays binding either way.
 
-`references/golden-example.md` is our illustration of the defaults above, not a fourth
-source. On any API question it is subordinate to the handbook and the installed types;
-prefer those when the example's prose and the handbook disagree.
+`references/golden-example.md` is our illustration of the defaults above, not a fifth
+source. On any API question it is subordinate to the handbook, the checkout and the
+installed types.
 
 ## Default Decisions
 
@@ -178,23 +192,46 @@ prefer those when the example's prose and the handbook disagree.
 ## Source Map
 
 `references/upstream/` is vendored from `reatom/reatom`; see its `VERSION` for the pin.
-Everything below is in the **project's own** `node_modules`, not in this plugin.
 
-- API signatures and JSDoc: `node_modules/@reatom/core/dist/index.d.ts`
-- React adapter: `node_modules/@reatom/react/README.md` — the package's `.d.ts` is thin
-- JSX adapter: `node_modules/@reatom/jsx/dist/index.d.ts` and `README.md`
+The upstream checkout is a monorepo. Open the file, do not browse the workspace:
+
+| Looking for | Read |
+| --- | --- |
+| Core: atoms, computed, action, extend | `packages/core/src/core` |
+| Async: `wrap`, `withAsync`, `withAsyncData`, abort, cache | `packages/core/src/async` |
+| Routing | `packages/core/src/routing` |
+| Forms | `packages/core/src/form` |
+| Persistence | `packages/core/src/persist` |
+| Lifecycle and extension hooks | `packages/core/src/extensions` |
+| Collections and primitives | `packages/core/src/primitives` |
+| Browser-side helpers | `packages/core/src/web` |
+| React adapter | `packages/react/src` |
+| JSX adapter | `packages/jsx/src` |
+| Other adapters | `packages/vue/src`, `packages/solid-js/src`, `packages/preact/src`, `packages/lit/src` |
+| Exact intended behavior | the `*.test.ts` beside the implementation |
+| Prose and guides | `docs/src/content/docs` |
+| Whole working applications | `examples` |
+
+Everything below is in the **project's own** `node_modules`, not in this plugin and not
+in the checkout:
+
+- Installed API signatures: `node_modules/@reatom/core/dist/index.d.ts`
 - Installed version: the project's `package.json`
 
-`node_modules/@reatom/core/README.md` is install notes, not the handbook. Use the `.d.ts`.
+`node_modules/@reatom/core/README.md` is install notes, not the handbook.
 
-## When To Inspect `node_modules`
+## When To Read The Sources
 
-Read the installed package for:
+Read the upstream checkout for:
 
-- API signature uncertainty the handbook does not resolve.
-- Any question where the installed version might differ from `upstream/VERSION`.
+- How a primitive actually behaves, beyond what its signature says.
 - Adapter-specific behavior for React, Preact, Vue, Solid, Lit, or JSX.
 - Source-level behavior around abort, routing, persistence, SSR, or testing.
+- A working end-to-end shape — `examples` holds whole applications.
+- The precise contract of an edge case — the tests state it executably.
+
+Read the project's `node_modules` for one thing only: which version is installed, and
+what its `.d.ts` says when that disagrees with the checkout.
 
 ## Validation Checklist
 
