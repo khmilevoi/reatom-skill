@@ -19,7 +19,7 @@ const {
 } = require('../../scripts/routing')
 
 const ROUTE = path.join(__dirname, '..', '..', 'scripts', 'route.js')
-const INIT = path.join(__dirname, '..', '..', 'scripts', 'init-claude-md.js')
+const INIT = path.join(__dirname, '..', '..', 'scripts', 'claude-md.js')
 
 const plan = {
   assignments: { state: ['src/model.ts'], async: ['src/model.ts'] },

@@ -41,16 +41,13 @@ function count(text, needle) {
   return text.split(needle).length - 1
 }
 
-function fail(message) {
-  process.stdout.write(message + '\n')
-  process.exitCode = 1
-}
-
-function main() {
-  const target = process.argv[2]
-    ? path.resolve(process.argv[2])
-    : path.join(process.cwd(), 'CLAUDE.md')
-
+// Returns rather than exits: init.js runs this alongside the clone and reports
+// both outcomes, so neither job may end the process on its own.
+//
+// The message strings are byte-identical to what this script printed before
+// the split — routing.test.js asserts on ^Created / ^Appended / ^Rewrote, and
+// there is no reason to churn the operator-visible wording for a refactor.
+function applyBlock(target) {
   let existing = null
   try {
     existing = fs.readFileSync(target, 'utf8')
@@ -60,8 +57,7 @@ function main() {
 
   if (existing === null) {
     fs.writeFileSync(target, BLOCK + '\n')
-    process.stdout.write(`Created ${target} with the reatom-audit block.\n`)
-    return
+    return { ok: true, message: `Created ${target} with the reatom-audit block.` }
   }
 
   const opens = count(existing, OPEN)
@@ -72,30 +68,37 @@ function main() {
   // instructing the agent, and guessing where an unclosed one ends would eat
   // their prose — so this stops and says what it found.
   if (opens !== closes || opens > 1) {
-    return fail(
-      `${target} has ${opens} ${OPEN} and ${closes} ${CLOSE} — expected one of each. ` +
-      'Repair it by hand, then re-run.'
-    )
+    return {
+      ok: false,
+      message:
+        `${target} has ${opens} ${OPEN} and ${closes} ${CLOSE} — expected one of each. ` +
+        'Repair it by hand, then re-run.'
+    }
   }
 
   if (opens === 1) {
     const start = existing.indexOf(OPEN) + OPEN.length
     const end = existing.indexOf(CLOSE)
     if (end < existing.indexOf(OPEN)) {
-      return fail(`${target} closes the reatom-audit block before it opens it. Repair it by hand.`)
+      return { ok: false, message: `${target} closes the reatom-audit block before it opens it. Repair it by hand.` }
     }
     if (existing.slice(start, end) === INNER) {
-      process.stdout.write(`${target} already carries the current reatom-audit block.\n`)
-      return
+      return { ok: true, message: `${target} already carries the current reatom-audit block.` }
     }
     fs.writeFileSync(target, existing.slice(0, start) + INNER + existing.slice(end))
-    process.stdout.write(`Rewrote the reatom-audit block in ${target}.\n`)
-    return
+    return { ok: true, message: `Rewrote the reatom-audit block in ${target}.` }
   }
 
   const separator = existing.endsWith('\n\n') ? '' : existing.endsWith('\n') ? '\n' : '\n\n'
   fs.writeFileSync(target, existing + separator + BLOCK + '\n')
-  process.stdout.write(`Appended the reatom-audit block to ${target}.\n`)
+  return { ok: true, message: `Appended the reatom-audit block to ${target}.` }
 }
 
-main()
+module.exports = { applyBlock, OPEN, CLOSE, BODY, BLOCK }
+
+if (require.main === module) {
+  const target = process.argv[2] ? path.resolve(process.argv[2]) : path.join(process.cwd(), 'CLAUDE.md')
+  const r = applyBlock(target)
+  process.stdout.write(r.message + '\n')
+  if (!r.ok) process.exitCode = 1
+}

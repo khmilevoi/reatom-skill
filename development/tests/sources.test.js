@@ -255,3 +255,58 @@ test('ensureSources defaults to the machine cache path when given no target', ()
   const r = ensureSources({ runGit: rec.runGit, exists: () => false, mkdir: () => {} })
   assert.equal(r.path, defaultSourcesPath())
 })
+
+const INIT = path.join(__dirname, '..', '..', 'scripts', 'init.js')
+
+// init.js is a CLI with no injection seam, so the sources half is steered
+// entirely through the cache-location environment: a cache root that cannot
+// hold a directory fails deterministically and offline, and a pre-made clone
+// at the expected path makes the update path a local no-op.
+function runInit(dir, env = {}) {
+  return spawnSync('node', [INIT], {
+    cwd: dir,
+    encoding: 'utf8',
+    env: { ...process.env, ...env }
+  })
+}
+
+test('integration: init writes the CLAUDE.md block even when the clone fails', () => {
+  const dir = makeRepo()
+  // A *file* where the cache root must be a directory. mkdir fails, so the
+  // sources half fails without a network call and without depending on
+  // whether this machine can reach github.com.
+  const cache = path.join(dir, 'cache-is-a-file')
+  fs.writeFileSync(cache, 'not a directory\n')
+  const out = runInit(dir, { XDG_CACHE_HOME: cache, LOCALAPPDATA: cache })
+
+  assert.equal(out.status, 1, 'a half-success is reported as a failure')
+  assert.match(fs.readFileSync(path.join(dir, 'CLAUDE.md'), 'utf8'), /## Reatom audit/)
+  assert.match(out.stdout, /CLAUDE\.md:/)
+  assert.match(out.stdout, /sources:\s+FAILED/)
+  assert.match(out.stdout, /init/, 'and says how to retry')
+})
+
+test('integration: init pins the clone it found and reports its revision', () => {
+  const dir = makeRepo()
+  const clone = makeRealClone()
+  const cacheRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'reatom-cacheroot-'))
+  // Put the pre-made clone exactly where init would look, so the update path
+  // runs against a local repo with no remote to reach.
+  const dest = path.join(cacheRoot, 'reatom-claude-plugin', 'sources')
+  fs.mkdirSync(path.dirname(dest), { recursive: true })
+  fs.cpSync(clone, dest, { recursive: true })
+  spawnSync('git', ['remote', 'add', 'origin', clone], { cwd: dest, encoding: 'utf8' })
+  spawnSync('git', ['branch', '-M', 'v1001'], { cwd: dest, encoding: 'utf8' })
+
+  const out = runInit(dir, { XDG_CACHE_HOME: cacheRoot, LOCALAPPDATA: cacheRoot })
+  assert.equal(out.status, 0, out.stdout + out.stderr)
+  assert.match(out.stdout, /sources:\s+updated/)
+
+  const pin = fs.readFileSync(path.join(dir, '.git', '.reatom-plugin', 'sources'), 'utf8')
+  assert.equal(pin.trim(), dest + ' auto')
+
+  // And the resolver the skill calls now answers.
+  const resolved = spawnSync('node', [SOURCES], { cwd: dir, encoding: 'utf8' })
+  assert.equal(resolved.status, 0, resolved.stdout)
+  assert.match(resolved.stdout, /ref:    v1001/)
+})
