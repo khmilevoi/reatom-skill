@@ -12,7 +12,7 @@ Audit Reatom code in this repository against
 | --- | --- |
 | empty | `node "${CLAUDE_PLUGIN_ROOT}/scripts/route.js" --changed` |
 | `all` | `node "${CLAUDE_PLUGIN_ROOT}/scripts/route.js" --all` |
-| `init` | `node "${CLAUDE_PLUGIN_ROOT}/scripts/init-claude-md.js"` |
+| `init` | `node "${CLAUDE_PLUGIN_ROOT}/scripts/init.js"` |
 | anything else | `node "${CLAUDE_PLUGIN_ROOT}/scripts/route.js" <the arguments, verbatim>` |
 
 `init` is not an audit. It writes the "when to run this" block into the project's

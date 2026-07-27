@@ -375,7 +375,7 @@ test('every auditor opens with a closed output contract', () => {
 test('the command names every mode and routes each through a real script', () => {
   const command = fs.readFileSync(path.join(ROOT, 'commands', 'reatom-audit.md'), 'utf8')
   assert.ok(command.includes('scripts/route.js'), 'the command calls the router')
-  assert.ok(command.includes('scripts/init-claude-md.js'), 'and the CLAUDE.md initializer')
+  assert.ok(command.includes('scripts/init.js'), 'and the init entry point')
   for (const flag of ['--changed', '--all']) {
     assert.ok(command.includes(flag), `the command spells out ${flag}`)
   }
@@ -397,7 +397,7 @@ test('the argument hint advertises every mode the command accepts', () => {
 })
 
 test('every script the command names exists', () => {
-  for (const name of ['route.js', 'init-claude-md.js', 'routing.js']) {
+  for (const name of ['route.js', 'init.js', 'routing.js']) {
     assert.ok(fs.existsSync(path.join(ROOT, 'scripts', name)), `scripts/${name} exists`)
   }
 })
