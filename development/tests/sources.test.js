@@ -173,6 +173,18 @@ test('a stale pin names both the path and the file holding it', () => {
   assert.match(r.text, /sources/, 'and the pin file to fix')
 })
 
+test('a checkout that exists but git cannot read is an error with its own wording', () => {
+  const dir = makeRepo()
+  const clone = makeClone()
+  writeState(dir, 'sources', clone + ' auto\n')
+  const r = report(dir, {
+    describe: () => null
+  })
+  assert.equal(r.ok, false)
+  assert.match(r.text, /exists but git cannot read it/)
+  assert.match(r.text, /Delete it and run \/reatom-audit init/)
+})
+
 test('integration: the CLI exits 1 and says why when there is no clone', () => {
   const dir = makeRepo()
   const out = spawnSync('node', [SOURCES], {
