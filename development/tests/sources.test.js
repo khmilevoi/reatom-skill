@@ -121,8 +121,12 @@ test('describeClone reads the revision, date and branch out of the checkout', ()
   assert.equal(info.ref, 'v1001')
 })
 
-test('describeClone returns null when the directory is not a checkout', () => {
-  assert.equal(describeClone(os.tmpdir(), () => null), null)
+test('describeClone returns null for a git repository with no commits', () => {
+  // A real repo, not a stub: `git init` alone leaves no HEAD, so
+  // `git rev-parse --short HEAD` genuinely fails and this exercises the real
+  // failure path instead of an injected one.
+  const dir = makeRepo()
+  assert.equal(describeClone(dir), null)
 })
 
 test('ageInDays counts whole days and never goes negative', () => {
@@ -309,4 +313,49 @@ test('integration: init pins the clone it found and reports its revision', () =>
   const resolved = spawnSync('node', [SOURCES], { cwd: dir, encoding: 'utf8' })
   assert.equal(resolved.status, 0, resolved.stdout)
   assert.match(resolved.stdout, /ref:    v1001/)
+})
+
+test('integration: init leaves a hand-written sources pin alone', () => {
+  const dir = makeRepo()
+  const customPath = path.join(os.tmpdir(), 'reatom-custom-checkout-12345')
+  const written = customPath + '\n'
+  writeState(dir, 'sources', written)
+  // A cache root that would happily accept a clone, so a change here could
+  // only be explained by init ignoring the pin, never by the clone failing.
+  const cacheRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'reatom-cacheroot-'))
+
+  const out = runInit(dir, { XDG_CACHE_HOME: cacheRoot, LOCALAPPDATA: cacheRoot })
+
+  assert.equal(out.status, 0, out.stdout + out.stderr)
+  assert.match(out.stdout, /left alone/)
+
+  const pin = fs.readFileSync(path.join(dir, '.git', '.reatom-plugin', 'sources'), 'utf8')
+  assert.equal(pin, written, 'the hand-written pin survives byte-for-byte')
+
+  assert.equal(
+    fs.existsSync(path.join(cacheRoot, 'reatom-claude-plugin', 'sources')),
+    false,
+    'no clone was fetched to the default path'
+  )
+})
+
+test('integration: init leaves a "none" sources pin alone and clones nothing', () => {
+  const dir = makeRepo()
+  const written = 'none\n'
+  writeState(dir, 'sources', written)
+  const cacheRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'reatom-cacheroot-'))
+
+  const out = runInit(dir, { XDG_CACHE_HOME: cacheRoot, LOCALAPPDATA: cacheRoot })
+
+  assert.equal(out.status, 0, out.stdout + out.stderr)
+  assert.match(out.stdout, /left alone/)
+
+  const pin = fs.readFileSync(path.join(dir, '.git', '.reatom-plugin', 'sources'), 'utf8')
+  assert.equal(pin, written, 'the "none" pin survives untouched')
+
+  assert.equal(
+    fs.existsSync(path.join(cacheRoot, 'reatom-claude-plugin', 'sources')),
+    false,
+    'the refused 29 MB was never fetched'
+  )
 })

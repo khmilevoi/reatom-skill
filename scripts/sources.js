@@ -145,6 +145,7 @@ function report(cwd, deps = {}) {
 
 function spawnGitStatus(cwd, args) {
   const r = spawnSync('git', args, { cwd, encoding: 'utf8' })
+  if (r.error) return { status: 1, stderr: `git could not be run: ${r.error.message}` }
   return { status: r.status === null ? 1 : r.status, stderr: r.stderr || '' }
 }
 

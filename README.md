@@ -60,7 +60,7 @@ loses nothing.
 `/reatom-audit init` also clones `reatom/reatom@v1001` into this machine's cache
 (`%LOCALAPPDATA%\reatom-claude-plugin\sources` on Windows,
 `${XDG_CACHE_HOME:-~/.cache}/reatom-claude-plugin/sources` elsewhere — shallow,
-single-branch, about 29 MB, one clone for every project) and pins the path in
+single-branch, about 29 MB, one clone shared by every project) and pins the path in
 `.git/.reatom-plugin/sources`. The skill reads implementations, tests, docs and
 examples from there instead of from an installed `.d.ts`. Nothing updates that clone
 on its own: re-run `init` to fetch. Point the pin at your own Reatom checkout to work

@@ -23,7 +23,10 @@ Audit Reatom code in this repository against
 2. Clones `reatom/reatom@v1001` into this machine's cache directory (or updates it if
    it is already there — shallow, single-branch, about 29 MB) and pins the path in
    `.git/.reatom-plugin/sources`, so the skill can read implementations, tests and
-   examples instead of an installed `.d.ts`.
+   examples instead of an installed `.d.ts`. This only ever touches an `auto` pin or no
+   pin at all — a bare pin is the operator's word, so a hand-written checkout path and a
+   `none` pin are both left exactly as written, with no clone and no fetch. Overwriting
+   either on every `init` would erase the one thing that grammar exists to protect.
 
 The `CLAUDE.md` block is written even with no network. If either job fails the script
 says which one and exits non-zero. Report what it printed and stop — there is nothing

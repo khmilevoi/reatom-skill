@@ -193,7 +193,7 @@ installed types.
 
 `references/upstream/` is vendored from `reatom/reatom`; see its `VERSION` for the pin.
 
-The upstream checkout is a monorepo. Open the file, do not browse the workspace:
+The upstream checkout is a monorepo. Go straight to these paths, do not browse the workspace:
 
 | Looking for | Read |
 | --- | --- |
