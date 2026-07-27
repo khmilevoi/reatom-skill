@@ -10,6 +10,7 @@ const {
   filterIgnored,
   formatOrders
 } = require('./routing')
+const { statePath, readState, writeState, parsePin, formatPin } = require('./state')
 
 const REFERENCES = path.join(__dirname, '..', 'skills', 'reatom', 'references')
 
@@ -91,13 +92,8 @@ function detectBaseRef(cwd) {
   return { ref: guess, guessed: true }
 }
 
-const BASE_CACHE_FILE = 'reatom-base-branch'
+const BASE_STATE = 'base-branch'
 const NO_BASE = 'none'
-
-function gitDirPath(cwd, name) {
-  const gitDir = git(cwd, ['rev-parse', '--git-dir'])
-  return path.resolve(cwd, gitDir ? gitDir.trim() : '.git', name)
-}
 
 function baseWarning(ref, pinFile) {
   return ref
@@ -111,28 +107,6 @@ function baseWarning(ref, pinFile) {
       `(or write "none" to silence this for good), edit ${pinFile}.`
 }
 
-const AUTO_SUFFIX = ' auto'
-
-// A pin the router wrote itself is marked so it can be revisited cheaply later;
-// a pin the operator wrote by hand (no suffix) is trusted forever, which is
-// the whole point of letting them override a wrong guess.
-function parsePin(raw) {
-  const trimmed = raw.trim()
-  if (!trimmed) return null
-  if (trimmed.endsWith(AUTO_SUFFIX)) {
-    return { value: trimmed.slice(0, -AUTO_SUFFIX.length), auto: true }
-  }
-  return { value: trimmed, auto: false }
-}
-
-function writePin(pinFile, value) {
-  try {
-    fs.writeFileSync(pinFile, value + AUTO_SUFFIX + '\n')
-  } catch {
-    // fail-open: the pin is only a shortcut, detection already answered
-  }
-}
-
 // The pin exists so detection runs once and so the operator has somewhere
 // concrete to correct a wrong answer. A manually-written pin (no auto suffix)
 // is trusted forever — that is what the operator asked for. An auto-written
@@ -140,14 +114,8 @@ function writePin(pinFile, value) {
 // conventional-name recheck on every run, so a base branch that appears later
 // is picked up without waiting on the guess to go stale on its own.
 function resolveBaseRef(cwd) {
-  const pinFile = gitDirPath(cwd, BASE_CACHE_FILE)
-  let raw = null
-  try {
-    raw = fs.readFileSync(pinFile, 'utf8')
-  } catch {
-    // no pin yet → detect below
-  }
-  const pin = raw ? parsePin(raw) : null
+  const pinFile = statePath(cwd, BASE_STATE)
+  const pin = parsePin(readState(cwd, BASE_STATE))
 
   if (pin && !pin.auto) {
     if (pin.value === NO_BASE) return { ref: null, warning: null }
@@ -156,7 +124,7 @@ function resolveBaseRef(cwd) {
   } else if (pin && pin.auto) {
     const cheap = cheapBaseRef(cwd)
     if (cheap) {
-      writePin(pinFile, cheap)
+      writeState(cwd, BASE_STATE, formatPin(cheap))
       return { ref: cheap, warning: null }
     }
     if (pin.value === NO_BASE) return { ref: null, warning: null }
@@ -165,7 +133,7 @@ function resolveBaseRef(cwd) {
   }
 
   const { ref, guessed } = detectBaseRef(cwd)
-  writePin(pinFile, ref || NO_BASE)
+  writeState(cwd, BASE_STATE, formatPin(ref || NO_BASE))
   return { ref, warning: guessed ? baseWarning(ref, pinFile) : null }
 }
 
@@ -195,22 +163,22 @@ function repositoryFiles(cwd) {
   return all.filter((f) => fs.existsSync(path.join(cwd, f)))
 }
 
-const CACHE_FILE = 'reatom-audit-last'
+const CACHE_STATE = 'audit-last'
 
 function readCache(cwd) {
+  const raw = readState(cwd, CACHE_STATE)
+  if (raw === null) return {}
   try {
-    return parseCache(fs.readFileSync(gitDirPath(cwd, CACHE_FILE), 'utf8'))
+    return parseCache(raw)
   } catch {
     return {}
   }
 }
 
 function writeCache(cwd, cache) {
-  try {
-    fs.writeFileSync(gitDirPath(cwd, CACHE_FILE), JSON.stringify(cache) + '\n')
-  } catch {
-    // fail-open: the cache is only an optimization
-  }
+  // fail-open by contract: writeState swallows its own errors and the cache
+  // is only an optimization.
+  writeState(cwd, CACHE_STATE, JSON.stringify(cache) + '\n')
 }
 
 // The current name first, the pre-0.6 name second. An existing project keeps
@@ -259,7 +227,7 @@ function main() {
     return
   }
   if (mode === 'init') {
-    return fail('init is not an audit scope — run scripts/init-claude-md.js instead.')
+    return fail('init is not an audit scope — run scripts/init.js instead.')
   }
 
   const cwd = process.cwd()

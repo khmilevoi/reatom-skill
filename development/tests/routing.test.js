@@ -284,7 +284,7 @@ test('integration: the bare words the operator types are read as modes, not as p
 
   const init = runRoute(dir, ['init'])
   assert.equal(init.status, 1, 'init is a different script, not an empty audit')
-  assert.match(init.stdout, /init-claude-md\.js/)
+  assert.match(init.stdout, /init\.js/)
 })
 
 // Commits a TypeScript file on a fresh branch off the repo's default branch.
@@ -337,12 +337,13 @@ test('integration: the heuristic does not choose the current branch own remote m
 })
 
 const BASE_PIN = 'reatom-base-branch'
+const BASE_PIN_PATH = path.join('.git', '.reatom-plugin', 'base-branch')
 
-test('integration: detection pins the base branch into .git', () => {
+test('integration: detection pins the base branch into .git/.reatom-plugin', () => {
   const dir = makeRepo({ changed: null, branch: 'master' })
   commitOnFeatureBranch(dir)
   runRoute(dir)
-  assert.equal(fs.readFileSync(path.join(dir, '.git', BASE_PIN), 'utf8').trim(), 'refs/heads/master auto')
+  assert.equal(fs.readFileSync(path.join(dir, BASE_PIN_PATH), 'utf8').trim(), 'refs/heads/master auto')
 })
 
 test('integration: a "none" pin narrows the audit to the working tree', () => {
@@ -372,9 +373,9 @@ test('integration: a pin that no longer resolves falls back to fresh detection',
   fs.writeFileSync(path.join(dir, '.git', BASE_PIN), 'refs/heads/deleted-branch\n')
   assert.match(runRoute(dir).stdout, /committed\.ts/)
   assert.equal(
-    fs.readFileSync(path.join(dir, '.git', BASE_PIN), 'utf8').trim(),
+    fs.readFileSync(path.join(dir, BASE_PIN_PATH), 'utf8').trim(),
     'refs/heads/master auto',
-    'the stale pin is replaced with what detection found'
+    'the stale pin is replaced with what detection found, written into .reatom-plugin'
   )
 })
 
@@ -383,7 +384,7 @@ test('integration: a guessed base branch warns once and names the pin file', () 
   commitOnFeatureBranch(dir)
   const first = runRoute(dir).stdout
   assert.match(first, /guessed the base branch as "refs\/heads\/release"/)
-  assert.match(first, /reatom-base-branch/)
+  assert.match(first, /\.reatom-plugin[\\/]base-branch/)
   assert.match(first, /committed\.ts/, 'the warning rides along with the orders')
 
   fs.writeFileSync(path.join(dir, 'src', 'other.ts'), 'export const q = setInterval(() => {}, 1000)\n')
@@ -397,7 +398,7 @@ test('integration: an undetectable base branch warns and still reports its scope
   const dir = makeRepo({ changed: null, branch: 'release' })
   const out = runRoute(dir).stdout
   assert.match(out, /could not identify a base branch/)
-  assert.match(out, /reatom-base-branch/)
+  assert.match(out, /\.reatom-plugin[\\/]base-branch/)
   assert.match(out, /No auditable TypeScript in scope/)
 })
 
@@ -828,4 +829,33 @@ test('init refuses a file carrying two blocks', () => {
   const written = fs.readFileSync(path.join(dir, 'CLAUDE.md'), 'utf8')
   assert.match(written, /first/)
   assert.match(written, /second/)
+})
+
+test('integration: state is written into .git/.reatom-plugin', () => {
+  const dir = makeRepo()
+  runRoute(dir)
+  const stateDir = path.join(dir, '.git', '.reatom-plugin')
+  assert.ok(fs.existsSync(path.join(stateDir, 'base-branch')), 'the base pin moved')
+  assert.ok(fs.existsSync(path.join(stateDir, 'audit-last')), 'the audit cache moved')
+  assert.ok(!fs.existsSync(path.join(dir, '.git', 'reatom-base-branch')), 'and nothing is written flat')
+})
+
+test('integration: a hand-written pre-0.7 base pin still silences the guess', () => {
+  const dir = makeRepo({ branch: 'trunkless' })
+  // No conventional branch name exists, so without a pin the router guesses
+  // and warns. The legacy flat file must be enough to stop that.
+  fs.writeFileSync(path.join(dir, '.git', 'reatom-base-branch'), 'none\n')
+  const out = runRoute(dir)
+  assert.equal(out.status, 0, out.stderr)
+  assert.ok(!/guessed the base branch/.test(out.stdout), 'the legacy pin is honoured')
+})
+
+test('integration: a pre-0.7 audit cache still skips an unchanged pair', () => {
+  const dir = makeRepo()
+  runRoute(dir)
+  const stateDir = path.join(dir, '.git', '.reatom-plugin')
+  // Simulate an upgrade: the cache exists only under the old flat name.
+  fs.renameSync(path.join(stateDir, 'audit-last'), path.join(dir, '.git', 'reatom-audit-last'))
+  fs.rmSync(path.join(stateDir, 'base-branch'), { force: true })
+  assert.match(runRoute(dir).stdout, /Nothing to dispatch/, 'the legacy cache is still read')
 })
