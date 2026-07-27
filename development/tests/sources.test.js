@@ -95,3 +95,91 @@ test('a pin of "none" disables sources for the project', () => {
 test('the ref is the branch the vendored handbook tracks', () => {
   assert.equal(REF, 'v1001')
 })
+
+const { describeClone, ageInDays, report } = require('../../scripts/sources')
+
+const SOURCES = path.join(__dirname, '..', '..', 'scripts', 'sources.js')
+
+// A real, tiny, offline git repository standing in for the clone.
+function makeRealClone() {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'reatom-realclone-'))
+  const git = (args) => spawnSync('git', args, { cwd: dir, encoding: 'utf8' })
+  git(['init', '-q', '-b', 'v1001'])
+  git(['config', 'user.email', 't@t'])
+  git(['config', 'user.name', 't'])
+  fs.writeFileSync(path.join(dir, 'README.md'), '# reatom\n')
+  git(['add', '.'])
+  git(['commit', '-q', '-m', 'seed'])
+  return dir
+}
+
+test('describeClone reads the revision, date and branch out of the checkout', () => {
+  const clone = makeRealClone()
+  const info = describeClone(clone)
+  assert.match(info.commit, /^[0-9a-f]{7,}$/)
+  assert.match(info.date, /^\d{4}-\d{2}-\d{2}$/)
+  assert.equal(info.ref, 'v1001')
+})
+
+test('describeClone returns null when the directory is not a checkout', () => {
+  assert.equal(describeClone(os.tmpdir(), () => null), null)
+})
+
+test('ageInDays counts whole days and never goes negative', () => {
+  const now = Date.parse('2026-07-27T00:00:00Z')
+  assert.equal(ageInDays('2026-07-19T00:00:00Z', now), 8)
+  assert.equal(ageInDays('2026-07-27T06:00:00Z', now), 0, 'a clock skew is not a negative age')
+  assert.equal(ageInDays('not a date', now), null)
+})
+
+test('the report prints path, ref and a dated commit with its age', () => {
+  const dir = makeRepo()
+  const clone = makeRealClone()
+  writeState(dir, 'sources', clone + ' auto\n')
+  const r = report(dir, {
+    describe: () => ({ commit: '06a7f7a1', iso: '2026-07-19T00:00:00Z', date: '2026-07-19', ref: 'v1001' }),
+    now: Date.parse('2026-07-27T00:00:00Z')
+  })
+  assert.equal(r.ok, true)
+  assert.match(r.text, /^path:   /m)
+  assert.match(r.text, /^ref:    v1001$/m)
+  assert.match(r.text, /^commit: 06a7f7a1  2026-07-19  \(8 days old\)$/m)
+})
+
+test('a missing clone names the command that would create it', () => {
+  const dir = makeRepo()
+  const r = report(dir, { env: { XDG_CACHE_HOME: '/nope' }, platform: 'linux' })
+  assert.equal(r.ok, false)
+  assert.match(r.text, /\/reatom-audit init/)
+  assert.match(r.text, /v1001/)
+})
+
+test('a disabled project is told so and is not nagged to initialise', () => {
+  const dir = makeRepo()
+  writeState(dir, 'sources', 'none\n')
+  const r = report(dir)
+  assert.equal(r.ok, false)
+  assert.match(r.text, /disabled/)
+  assert.ok(!r.text.includes('/reatom-audit init'), 'do not argue with a stated decision')
+})
+
+test('a stale pin names both the path and the file holding it', () => {
+  const dir = makeRepo()
+  const gone = path.join(os.tmpdir(), 'reatom-gone-98765')
+  writeState(dir, 'sources', gone + '\n')
+  const r = report(dir)
+  assert.equal(r.ok, false)
+  assert.ok(r.text.includes(gone), 'the dead path')
+  assert.match(r.text, /sources/, 'and the pin file to fix')
+})
+
+test('integration: the CLI exits 1 and says why when there is no clone', () => {
+  const dir = makeRepo()
+  const out = spawnSync('node', [SOURCES], {
+    cwd: dir,
+    encoding: 'utf8',
+    env: { ...process.env, XDG_CACHE_HOME: path.join(os.tmpdir(), 'reatom-empty-cache'), LOCALAPPDATA: path.join(os.tmpdir(), 'reatom-empty-cache') }
+  })
+  assert.equal(out.status, 1)
+  assert.match(out.stdout, /\/reatom-audit init/)
+})

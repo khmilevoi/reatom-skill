@@ -1,6 +1,7 @@
 const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
+const { spawnSync } = require('node:child_process')
 const { readState, statePath, parsePin } = require('./state')
 
 const SOURCES_STATE = 'sources'
@@ -57,11 +58,105 @@ function resolveSources(cwd, { env, platform, exists = fs.existsSync } = {}) {
   }
 }
 
+function git(cwd, args) {
+  const r = spawnSync('git', args, { cwd, encoding: 'utf8' })
+  return r.status === 0 ? r.stdout.trim() : null
+}
+
+// Revision and freshness are read out of the clone every time rather than
+// recorded anywhere. A metadata file would need syncing, and a copy written
+// into one project's state goes stale the moment another project updates the
+// shared clone — revision is a property of the clone, not of a project.
+function describeClone(clonePath, runGit = git) {
+  const commit = runGit(clonePath, ['rev-parse', '--short', 'HEAD'])
+  const iso = runGit(clonePath, ['log', '-1', '--format=%cI'])
+  if (commit === null || iso === null) return null
+  const branch = runGit(clonePath, ['rev-parse', '--abbrev-ref', 'HEAD'])
+  return {
+    commit,
+    iso,
+    date: iso.slice(0, 10),
+    ref: branch && branch !== 'HEAD' ? branch : REF
+  }
+}
+
+const DAY = 86400000
+
+function ageInDays(iso, now = Date.now()) {
+  const then = Date.parse(iso)
+  if (!Number.isFinite(then)) return null
+  return Math.max(0, Math.floor((now - then) / DAY))
+}
+
+// The age is printed on every success, not only when it is large. Updates only
+// ever happen on `init`, so the standing risk is a clone quietly going stale;
+// a date the agent sees on every lookup is what pays for that choice.
+function report(cwd, deps = {}) {
+  const resolved = resolveSources(cwd, deps)
+
+  if (resolved.status === 'disabled') {
+    return {
+      ok: false,
+      text:
+        `sources: disabled for this project — ${resolved.pinFile} says "${NO_SOURCES}". ` +
+        'Delete that line to re-enable them.'
+    }
+  }
+
+  if (resolved.status === 'pinned-missing') {
+    return {
+      ok: false,
+      text:
+        `sources: pinned to ${resolved.path}, which is not a git checkout. ` +
+        `Correct or delete ${resolved.pinFile}, then run /reatom-audit init.`
+    }
+  }
+
+  if (resolved.status === 'missing') {
+    return {
+      ok: false,
+      text:
+        `sources: not cloned. Run /reatom-audit init to clone reatom/reatom@${REF} ` +
+        `into ${resolved.path}.`
+    }
+  }
+
+  const info = (deps.describe || describeClone)(resolved.path)
+  if (info === null) {
+    return {
+      ok: false,
+      text:
+        `sources: ${resolved.path} exists but git cannot read it. ` +
+        'Delete it and run /reatom-audit init.'
+    }
+  }
+
+  const days = ageInDays(info.iso, deps.now)
+  const age = days === null ? 'age unknown' : `${days} day${days === 1 ? '' : 's'} old`
+  return {
+    ok: true,
+    text: [
+      `path:   ${resolved.path}`,
+      `ref:    ${info.ref}`,
+      `commit: ${info.commit}  ${info.date}  (${age})`
+    ].join('\n')
+  }
+}
+
 module.exports = {
   REF,
   REMOTE,
   SOURCES_STATE,
   NO_SOURCES,
   defaultSourcesPath,
-  resolveSources
+  resolveSources,
+  describeClone,
+  ageInDays,
+  report
+}
+
+if (require.main === module) {
+  const r = report(process.cwd())
+  process.stdout.write(r.text + '\n')
+  if (!r.ok) process.exitCode = 1
 }
